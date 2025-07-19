@@ -6,11 +6,14 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
 
+
+  
+//  change in this function call api from backend
   const handleLogin = (e) => {
     e.preventDefault();
-    // For now, using static credentials. Later this will be connected to backend
+    
     if (username === 'test' && password === 'test123') {
-      // Redirect to MCQ page on successful login
+      
       navigate('/mcq');
     } else {
       alert('Invalid credentials');
