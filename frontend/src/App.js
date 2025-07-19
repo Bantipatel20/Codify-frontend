@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './components/Login';
 import MCQ from './components/MCQ';
+import Admin from './components/Admin';
 import './styles.css';
 
 function App() {
@@ -12,6 +13,7 @@ function App() {
           <Route path="/" element={<Navigate to="/login" />} />
           <Route path="/login" element={<Login />} />
           <Route path="/mcq" element={<MCQ />} />
+          <Route path="/admin" element={<Admin />} />
         </Routes>
       </div>
     </Router>
