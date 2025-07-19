@@ -7,7 +7,6 @@ const Login = () => {
   const navigate = useNavigate();
 
 
-  
 //  change in this function call api from backend
   const handleLogin = (e) => {
     e.preventDefault();
