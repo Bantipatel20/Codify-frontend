@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Login from './components/Login';
 import MCQ from './components/MCQ';
 import Admin from './components/Admin';
+import ModuleSelection from './components/ModuleSelection';
 import './styles.css';
 
 function App() {
@@ -12,6 +13,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/login" />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/modules" element={<ModuleSelection />} />
           <Route path="/mcq" element={<MCQ />} />
           <Route path="/admin" element={<Admin />} />
         </Routes>

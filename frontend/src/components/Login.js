@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import './Login.css';
 
 const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
 
@@ -12,8 +14,7 @@ const Login = () => {
     e.preventDefault();
     
     if (username === 'test' && password === 'test123') {
-      
-      navigate('/mcq');
+      navigate('/modules');
     } else {
       alert('Invalid credentials');
     }
@@ -33,14 +34,21 @@ const Login = () => {
               required
             />
           </div>
-          <div className="form-group">
+          <div className="form-group password-group">
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
             />
+            <button 
+              type="button" 
+              className="password-toggle"
+              onClick={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? "👁️" : "👁️‍🗨️"}
+            </button>
           </div>
           <button type="submit" className="login-button">
             Login

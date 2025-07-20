@@ -4,8 +4,8 @@ import React, { useState } from 'react';
 const mcqData = [
   {
     id: 1,
-    question: 'What is the capital of France?',
-    options: ['London', 'Berlin', 'Paris', 'Madrid'],
+    question: 'Which of the following is not a feature of Object-Oriented Programming?',
+    options: ['Inheritance', 'Encapsulation', 'Compilation', 'Polymorphism'],
     correctAnswer: 2 // Index of correct answer
   },
   {
@@ -16,8 +16,8 @@ const mcqData = [
   },
   {
     id: 3,
-    question: 'What is 2 + 2?',
-    options: ['3', '4', '5', '6'],
+    question: 'Which OOP concept allows a subclass to provide a specific implementation of a method already defined in its superclass?',
+    options: ['Inheritance3', 'Method Overriding', 'Data Hiding', 'Constructor'],
     correctAnswer: 1
   }
 ];
