@@ -140,20 +140,7 @@ const LoginPage = () => {
                         </div>
                     </form>
 
-                    {/* Demo Credentials */}
-                    <div className="mt-8 pt-6 border-t border-gray-600">
-                        <p className="text-center text-gray-400 text-sm mb-4">Demo Credentials:</p>
-                        <div className="grid grid-cols-2 gap-4 text-xs">
-                            <div className="bg-gray-800/50 rounded-lg p-3">
-                                <p className="text-blue-400 font-medium mb-1">Admin</p>
-                                <p className="text-gray-300">admin / admin123</p>
-                            </div>
-                            <div className="bg-gray-800/50 rounded-lg p-3">
-                                <p className="text-green-400 font-medium mb-1">Student</p>
-                                <p className="text-gray-300">user / user123</p>
-                            </div>
-                        </div>
-                    </div>
+                    
                 </div>
             </div>
         </div>
