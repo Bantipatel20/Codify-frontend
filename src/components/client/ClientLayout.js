@@ -53,7 +53,6 @@ const ClientLayout = () => {
                     </div>
                 </div>
             </nav>
-
             <div className="flex">
                 {/* Side Navigation */}
                 <div className="w-64 bg-gray-800 min-h-screen border-r border-gray-700">
@@ -81,7 +80,6 @@ const ClientLayout = () => {
                         })}
                     </nav>
 
-                  
                     
                 </div>
 
