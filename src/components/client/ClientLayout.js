@@ -81,20 +81,8 @@ const ClientLayout = () => {
                         })}
                     </nav>
 
-                    {/* User Info Card */}
-                    <div className="absolute bottom-8 left-4 right-4">
-                        <div className="bg-gradient-to-r from-gray-700 to-gray-600 rounded-xl p-4 border border-gray-600">
-                            <div className="flex items-center space-x-3">
-                                <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                                    <HiUser className="text-white" />
-                                </div>
-                                <div>
-                                    <p className="text-white font-medium">Student</p>
-                                    <p className="text-xs text-gray-300">Active Learner</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                  
+                    
                 </div>
 
                 {/* Main Content Area */}
