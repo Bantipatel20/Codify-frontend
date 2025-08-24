@@ -1,78 +1,217 @@
 // src/components/admin/Contest.js
 import React, { useState } from 'react';
-import { HiStar, HiPlus, HiUsers, HiCode, HiCalendar, HiClock, HiEye, HiPencil, HiTrash, HiPlay, HiStop, HiChartBar, HiDownload, HiFilter } from 'react-icons/hi';
+import { HiStar, HiPlus, HiUsers, HiCode, HiCalendar, HiClock, HiPencil, HiTrash, HiPlay, HiStop, HiChartBar, HiDownload, HiFilter } from 'react-icons/hi';
 
 const Contest = () => {
-    // Sample data - replace with API calls
+    // Updated sample data to match schema
     const [contests, setContests] = useState([
         {
-            id: 1,
+            _id: '1',
             title: 'Programming Contest 2024',
             description: 'Annual programming contest for CSE students',
-            startDate: '2024-02-15T10:00',
-            endDate: '2024-02-15T13:00',
+            startDate: new Date('2024-02-15T10:00'),
+            endDate: new Date('2024-02-15T13:00'),
             duration: '3 hours',
             status: 'Upcoming',
+            rules: 'Standard ACM ICPC rules apply',
+            maxParticipants: 100,
             problems: [
-                { id: 1, title: 'Two Sum', difficulty: 'Easy', points: 100 },
-                { id: 2, title: 'Binary Search', difficulty: 'Medium', points: 200 }
+                {
+                    problemId: '507f1f77bcf86cd799439011',
+                    title: 'Two Sum',
+                    difficulty: 'Easy',
+                    category: 'Array',
+                    points: 100,
+                    order: 1,
+                    solvedCount: 0,
+                    attemptCount: 0
+                },
+                {
+                    problemId: '507f1f77bcf86cd799439012',
+                    title: 'Binary Search',
+                    difficulty: 'Medium',
+                    category: 'Search',
+                    points: 200,
+                    order: 2,
+                    solvedCount: 0,
+                    attemptCount: 0
+                }
             ],
             participants: [
-                { id: 1, name: 'Banti', department: 'CSE', semester: 3, division: 1, batch: 'A1', score: 0, submissions: 0 },
-                { id: 2, name: 'Dhaval', department: 'CSE', semester: 3, division: 1, batch: 'B1', score: 0, submissions: 0 }
+                {
+                    userId: '507f1f77bcf86cd799439013',
+                    name: 'Banti',
+                    email: '23cs058@example.com',
+                    department: 'CSE',
+                    semester: 3,
+                    division: 1,
+                    batch: 'A1',
+                    score: 0,
+                    submissions: 0,
+                    problemsAttempted: [],
+                    registrationTime: new Date(),
+                    lastActivityTime: new Date()
+                },
+                {
+                    userId: '507f1f77bcf86cd799439014',
+                    name: 'Dhaval',
+                    email: '23cs060@example.com',
+                    department: 'CSE',
+                    semester: 3,
+                    division: 1,
+                    batch: 'B1',
+                    score: 0,
+                    submissions: 0,
+                    problemsAttempted: [],
+                    registrationTime: new Date(),
+                    lastActivityTime: new Date()
+                }
             ],
-            maxParticipants: 100,
+            participantSelection: 'manual',
+            filterCriteria: {
+                department: '',
+                semester: null,
+                division: null,
+                batch: ''
+            },
             totalPoints: 300,
-            createdBy: 'Admin',
-            createdAt: '2024-01-20',
-            rules: 'Standard ACM ICPC rules apply'
+            createdBy: '507f1f77bcf86cd799439015',
+            createdAt: new Date('2024-01-20'),
+            updatedAt: new Date('2024-01-20'),
+            analytics: {
+                totalSubmissions: 0,
+                successfulSubmissions: 0,
+                averageScore: 0,
+                participationRate: 0
+            },
+            settings: {
+                allowLateSubmission: false,
+                showLeaderboard: true,
+                showLeaderboardDuringContest: true,
+                freezeLeaderboard: false,
+                freezeTime: 60,
+                allowViewProblemsBeforeStart: false,
+                penaltyPerWrongSubmission: 0
+            },
+            isActive: true
         },
         {
-            id: 2,
+            _id: '2',
             title: 'Data Structures Challenge',
             description: 'Focus on advanced data structures',
-            startDate: '2024-02-20T14:00',
-            endDate: '2024-02-20T17:00',
+            startDate: new Date('2024-02-20T14:00'),
+            endDate: new Date('2024-02-20T17:00'),
             duration: '3 hours',
             status: 'Active',
+            rules: 'Time-based scoring system',
+            maxParticipants: 50,
             problems: [
-                { id: 3, title: 'Tree Traversal', difficulty: 'Medium', points: 150 },
-                { id: 4, title: 'Graph Algorithms', difficulty: 'Hard', points: 300 }
+                {
+                    problemId: '507f1f77bcf86cd799439016',
+                    title: 'Tree Traversal',
+                    difficulty: 'Medium',
+                    category: 'Tree',
+                    points: 150,
+                    order: 1,
+                    solvedCount: 1,
+                    attemptCount: 3
+                },
+                {
+                    problemId: '507f1f77bcf86cd799439017',
+                    title: 'Graph Algorithms',
+                    difficulty: 'Hard',
+                    category: 'Graph',
+                    points: 300,
+                    order: 2,
+                    solvedCount: 0,
+                    attemptCount: 2
+                }
             ],
             participants: [
-                { id: 3, name: 'Shashan', department: 'CSE', semester: 3, division: 2, batch: 'A2', score: 150, submissions: 3 }
+                {
+                    userId: '507f1f77bcf86cd799439018',
+                    name: 'Shashan',
+                    email: '23cs042@example.com',
+                    department: 'CSE',
+                    semester: 3,
+                    division: 2,
+                    batch: 'A2',
+                    score: 150,
+                    submissions: 3,
+                    problemsAttempted: [
+                        {
+                            problemId: '507f1f77bcf86cd799439016',
+                            attempts: 2,
+                            solved: true,
+                            score: 150,
+                            lastAttemptTime: new Date()
+                        },
+                        {
+                            problemId: '507f1f77bcf86cd799439017',
+                            attempts: 1,
+                            solved: false,
+                            score: 0,
+                            lastAttemptTime: new Date()
+                        }
+                    ],
+                    registrationTime: new Date(),
+                    lastActivityTime: new Date()
+                }
             ],
-            maxParticipants: 50,
+            participantSelection: 'manual',
+            filterCriteria: {
+                department: '',
+                semester: null,
+                division: null,
+                batch: ''
+            },
             totalPoints: 450,
-            createdBy: 'Admin',
-            createdAt: '2024-01-25',
-            rules: 'Time-based scoring system'
+            createdBy: '507f1f77bcf86cd799439015',
+            createdAt: new Date('2024-01-25'),
+            updatedAt: new Date('2024-01-25'),
+            analytics: {
+                totalSubmissions: 3,
+                successfulSubmissions: 1,
+                averageScore: 150,
+                participationRate: 2
+            },
+            settings: {
+                allowLateSubmission: false,
+                showLeaderboard: true,
+                showLeaderboardDuringContest: true,
+                freezeLeaderboard: false,
+                freezeTime: 60,
+                allowViewProblemsBeforeStart: false,
+                penaltyPerWrongSubmission: 10
+            },
+            isActive: true
         }
     ]);
 
+    // Updated problems list to match schema structure
     const [problems] = useState([
-        { id: 1, title: 'Two Sum', difficulty: 'Easy', category: 'Array', points: 100 },
-        { id: 2, title: 'Add Two Numbers', difficulty: 'Medium', category: 'Linked List', points: 200 },
-        { id: 3, title: 'Longest Substring', difficulty: 'Medium', category: 'String', points: 200 },
-        { id: 4, title: 'Median of Arrays', difficulty: 'Hard', category: 'Array', points: 300 },
-        { id: 5, title: 'Binary Search', difficulty: 'Medium', category: 'Search', points: 150 },
-        { id: 6, title: 'Tree Traversal', difficulty: 'Medium', category: 'Tree', points: 150 },
-        { id: 7, title: 'Graph Algorithms', difficulty: 'Hard', category: 'Graph', points: 300 }
+        { _id: '507f1f77bcf86cd799439011', title: 'Two Sum', difficulty: 'Easy', category: 'Array', points: 100 },
+        { _id: '507f1f77bcf86cd799439012', title: 'Add Two Numbers', difficulty: 'Medium', category: 'Linked List', points: 200 },
+        { _id: '507f1f77bcf86cd799439019', title: 'Longest Substring', difficulty: 'Medium', category: 'String', points: 200 },
+        { _id: '507f1f77bcf86cd799439020', title: 'Median of Arrays', difficulty: 'Hard', category: 'Array', points: 300 },
+        { _id: '507f1f77bcf86cd799439021', title: 'Binary Search', difficulty: 'Medium', category: 'Search', points: 150 },
+        { _id: '507f1f77bcf86cd799439016', title: 'Tree Traversal', difficulty: 'Medium', category: 'Tree', points: 150 },
+        { _id: '507f1f77bcf86cd799439017', title: 'Graph Algorithms', difficulty: 'Hard', category: 'Graph', points: 300 }
     ]);
 
+    // Updated students list to match schema structure
     const [students] = useState([
-        { id: 1, name: 'Banti', email: '23cs058@example.com', department: 'CSE', semester: 3, division: 1, batch: 'A1' },
-        { id: 2, name: 'Dhaval', email: '23cs060@example.com', department: 'CSE', semester: 3, division: 1, batch: 'B1' },
-        { id: 3, name: 'Shashan', email: '23cs042@example.com', department: 'CSE', semester: 3, division: 2, batch: 'A2' },
-        { id: 4, name: 'Raj', email: '23cs055@example.com', department: 'CSE', semester: 5, division: 1, batch: 'A1' },
-        { id: 5, name: 'Priya', email: '23it045@example.com', department: 'IT', semester: 3, division: 1, batch: 'B1' },
-        { id: 6, name: 'Amit', email: '23cs067@example.com', department: 'CSE', semester: 3, division: 1, batch: 'C1' }
+        { _id: '507f1f77bcf86cd799439013', name: 'Banti', email: '23cs058@example.com', department: 'CSE', semester: 3, division: 1, batch: 'A1' },
+        { _id: '507f1f77bcf86cd799439014', name: 'Dhaval', email: '23cs060@example.com', department: 'CSE', semester: 3, division: 1, batch: 'B1' },
+        { _id: '507f1f77bcf86cd799439018', name: 'Shashan', email: '23cs042@example.com', department: 'CSE', semester: 3, division: 2, batch: 'A2' },
+        { _id: '507f1f77bcf86cd799439022', name: 'Raj', email: '23cs055@example.com', department: 'CSE', semester: 5, division: 1, batch: 'A1' },
+        { _id: '507f1f77bcf86cd799439023', name: 'Priya', email: '23it045@example.com', department: 'IT', semester: 3, division: 1, batch: 'B1' },
+        { _id: '507f1f77bcf86cd799439024', name: 'Amit', email: '23cs067@example.com', department: 'CSE', semester: 3, division: 1, batch: 'C1' }
     ]);
 
     // State management
     const [activeTab, setActiveTab] = useState('overview');
     const [showCreateModal, setShowCreateModal] = useState(false);
-    const [showEditModal, setShowEditModal] = useState(false);
     const [showParticipantsModal, setShowParticipantsModal] = useState(false);
     const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
     const [selectedContest, setSelectedContest] = useState(null);
@@ -82,23 +221,32 @@ const Contest = () => {
         dateRange: 'All'
     });
 
-    // New contest form state
+    // Updated new contest form state to match schema
     const [newContest, setNewContest] = useState({
         title: '',
         description: '',
         startDate: '',
         endDate: '',
         duration: '',
-        rules: '',
+        rules: 'Standard contest rules apply',
         maxParticipants: 100,
         selectedProblems: [],
-        participantSelection: 'manual', // manual, department, semester, division, batch
+        participantSelection: 'manual',
         selectedParticipants: [],
         filterCriteria: {
             department: '',
-            semester: '',
-            division: '',
+            semester: null,
+            division: null,
             batch: ''
+        },
+        settings: {
+            allowLateSubmission: false,
+            showLeaderboard: true,
+            showLeaderboardDuringContest: true,
+            freezeLeaderboard: false,
+            freezeTime: 60,
+            allowViewProblemsBeforeStart: false,
+            penaltyPerWrongSubmission: 0
         }
     });
 
@@ -126,31 +274,68 @@ const Contest = () => {
         return new Date(dateString).toLocaleString();
     };
 
-    const calculateDuration = (start, end) => {
-        const startTime = new Date(start);
-        const endTime = new Date(end);
-        const diffHours = Math.abs(endTime - startTime) / 36e5;
-        return `${diffHours} hours`;
-    };
-
-    // Contest management functions
+    // Updated contest management functions
     const handleCreateContest = (e) => {
         e.preventDefault();
+        
+        const selectedProblemsData = newContest.selectedProblems.map((problemId, index) => {
+            const problem = problems.find(p => p._id === problemId);
+            return {
+                problemId: problem._id,
+                title: problem.title,
+                difficulty: problem.difficulty,
+                category: problem.category,
+                points: problem.points,
+                order: index + 1,
+                solvedCount: 0,
+                attemptCount: 0
+            };
+        });
+
+        const selectedParticipantsData = newContest.selectedParticipants.map(studentId => {
+            const student = students.find(s => s._id === studentId);
+            return {
+                userId: student._id,
+                name: student.name,
+                email: student.email,
+                department: student.department,
+                semester: student.semester,
+                division: student.division,
+                batch: student.batch,
+                score: 0,
+                submissions: 0,
+                problemsAttempted: [],
+                registrationTime: new Date(),
+                lastActivityTime: new Date()
+            };
+        });
+
         const contest = {
-            id: contests.length + 1,
-            ...newContest,
-            participants: newContest.selectedParticipants.map(id => {
-                const student = students.find(s => s.id === id);
-                return { ...student, score: 0, submissions: 0 };
-            }),
-            problems: newContest.selectedProblems.map(id => problems.find(p => p.id === id)),
-            totalPoints: newContest.selectedProblems.reduce((sum, id) => {
-                const problem = problems.find(p => p.id === id);
-                return sum + (problem?.points || 0);
-            }, 0),
+            _id: (contests.length + 1).toString(),
+            title: newContest.title,
+            description: newContest.description,
+            startDate: new Date(newContest.startDate),
+            endDate: new Date(newContest.endDate),
+            duration: newContest.duration,
             status: 'Upcoming',
-            createdBy: 'Admin',
-            createdAt: new Date().toISOString().split('T')[0]
+            rules: newContest.rules,
+            maxParticipants: newContest.maxParticipants,
+            problems: selectedProblemsData,
+            participants: selectedParticipantsData,
+            participantSelection: newContest.participantSelection,
+            filterCriteria: newContest.filterCriteria,
+            totalPoints: selectedProblemsData.reduce((sum, problem) => sum + problem.points, 0),
+            createdBy: '507f1f77bcf86cd799439015', // Current admin user ID
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            analytics: {
+                totalSubmissions: 0,
+                successfulSubmissions: 0,
+                averageScore: 0,
+                participationRate: 0
+            },
+            settings: newContest.settings,
+            isActive: true
         };
         
         setContests([...contests, contest]);
@@ -160,45 +345,69 @@ const Contest = () => {
 
     const resetNewContestForm = () => {
         setNewContest({
-            title: '', description: '', startDate: '', endDate: '', duration: '', rules: '',
-            maxParticipants: 100, selectedProblems: [], participantSelection: 'manual',
-            selectedParticipants: [], filterCriteria: { department: '', semester: '', division: '', batch: '' }
+            title: '',
+            description: '',
+            startDate: '',
+            endDate: '',
+            duration: '',
+            rules: 'Standard contest rules apply',
+            maxParticipants: 100,
+            selectedProblems: [],
+            participantSelection: 'manual',
+            selectedParticipants: [],
+            filterCriteria: {
+                department: '',
+                semester: null,
+                division: null,
+                batch: ''
+            },
+            settings: {
+                allowLateSubmission: false,
+                showLeaderboard: true,
+                showLeaderboardDuringContest: true,
+                freezeLeaderboard: false,
+                freezeTime: 60,
+                allowViewProblemsBeforeStart: false,
+                penaltyPerWrongSubmission: 0
+            }
         });
     };
 
     const handleDeleteContest = (contestId) => {
         if (window.confirm('Are you sure you want to delete this contest?')) {
-            setContests(contests.filter(c => c.id !== contestId));
+            setContests(contests.filter(c => c._id !== contestId));
         }
     };
 
     const handleStartContest = (contestId) => {
         setContests(contests.map(c => 
-            c.id === contestId ? { ...c, status: 'Active' } : c
+            c._id === contestId ? { ...c, status: 'Active', updatedAt: new Date() } : c
         ));
     };
 
     const handleEndContest = (contestId) => {
         setContests(contests.map(c => 
-            c.id === contestId ? { ...c, status: 'Completed' } : c
+            c._id === contestId ? { ...c, status: 'Completed', updatedAt: new Date() } : c
         ));
     };
 
+    // Updated filter function to match schema
     const getFilteredStudents = () => {
         if (newContest.participantSelection === 'manual') return students;
         
         return students.filter(student => {
             const { department, semester, division, batch } = newContest.filterCriteria;
             return (!department || student.department === department) &&
-                   (!semester || student.semester === parseInt(semester)) &&
-                   (!division || student.division === parseInt(division)) &&
+                   (!semester || student.semester === semester) &&
+                   (!division || student.division === division) &&
                    (!batch || student.batch === batch);
         });
     };
 
     const filteredContests = contests.filter(contest => {
         return (filters.status === 'All' || contest.status === filters.status) &&
-               (filters.department === 'All' || contest.participants.some(p => p.department === filters.department));
+               (filters.department === 'All' || contest.participants.some(p => p.department === filters.department)) &&
+               contest.isActive;
     });
 
     const tabs = [
@@ -266,7 +475,7 @@ const Contest = () => {
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <p className="text-gray-400 text-sm mb-1">Total Contests</p>
-                                        <p className="text-3xl font-bold text-white">{contests.length}</p>
+                                        <p className="text-3xl font-bold text-white">{contests.filter(c => c.isActive).length}</p>
                                     </div>
                                     <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
                                         <HiStar className="text-blue-400 text-xl" />
@@ -279,7 +488,7 @@ const Contest = () => {
                                     <div>
                                         <p className="text-gray-400 text-sm mb-1">Active Contests</p>
                                         <p className="text-3xl font-bold text-green-400">
-                                            {contests.filter(c => c.status === 'Active').length}
+                                            {contests.filter(c => c.status === 'Active' && c.isActive).length}
                                         </p>
                                     </div>
                                     <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center">
@@ -293,7 +502,7 @@ const Contest = () => {
                                     <div>
                                         <p className="text-gray-400 text-sm mb-1">Total Participants</p>
                                         <p className="text-3xl font-bold text-purple-400">
-                                            {contests.reduce((sum, c) => sum + c.participants.length, 0)}
+                                            {contests.filter(c => c.isActive).reduce((sum, c) => sum + c.participants.length, 0)}
                                         </p>
                                     </div>
                                     <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center">
@@ -305,9 +514,9 @@ const Contest = () => {
                             <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
                                 <div className="flex items-center justify-between">
                                     <div>
-                                        <p className="text-gray-400 text-sm mb-1">Total Problems</p>
+                                        <p className="text-gray-400 text-sm mb-1">Total Submissions</p>
                                         <p className="text-3xl font-bold text-yellow-400">
-                                            {contests.reduce((sum, c) => sum + c.problems.length, 0)}
+                                            {contests.filter(c => c.isActive).reduce((sum, c) => sum + c.analytics.totalSubmissions, 0)}
                                         </p>
                                     </div>
                                     <div className="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center">
@@ -346,9 +555,12 @@ const Contest = () => {
                                         className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
                                     >
                                         <option value="All">All Departments</option>
+                                        <option value="AIML">AIML</option>
                                         <option value="CSE">CSE</option>
                                         <option value="IT">IT</option>
                                         <option value="ECE">ECE</option>
+                                        <option value="MECH">MECH</option>
+                                        <option value="CIVIL">CIVIL</option>
                                     </select>
                                 </div>
                                 <div>
@@ -375,7 +587,7 @@ const Contest = () => {
                             
                             <div className="divide-y divide-gray-600">
                                 {filteredContests.map((contest) => (
-                                    <div key={contest.id} className="p-6 hover:bg-gray-700/30 transition-all duration-300">
+                                    <div key={contest._id} className="p-6 hover:bg-gray-700/30 transition-all duration-300">
                                         <div className="flex items-start justify-between">
                                             <div className="flex-1">
                                                 <div className="flex items-center space-x-4 mb-3">
@@ -387,7 +599,7 @@ const Contest = () => {
                                                 
                                                 <p className="text-gray-300 mb-4 max-w-2xl">{contest.description}</p>
                                                 
-                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                                                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
                                                     <div className="flex items-center space-x-2 text-sm text-gray-400">
                                                         <HiCalendar className="w-4 h-4" />
                                                         <span>{formatDate(contest.startDate)}</span>
@@ -404,12 +616,16 @@ const Contest = () => {
                                                         <HiCode className="w-4 h-4" />
                                                         <span>{contest.problems.length} problems</span>
                                                     </div>
+                                                    <div className="flex items-center space-x-2 text-sm text-gray-400">
+                                                        <HiChartBar className="w-4 h-4" />
+                                                        <span>{contest.analytics.totalSubmissions} submissions</span>
+                                                    </div>
                                                 </div>
 
                                                 <div className="flex flex-wrap gap-2">
                                                     {contest.problems.map((problem, index) => (
                                                         <span key={index} className={`px-2 py-1 rounded text-xs font-medium ${getDifficultyColor(problem.difficulty)}`}>
-                                                            {problem.title}
+                                                            {problem.title} ({problem.points}pts)
                                                         </span>
                                                     ))}
                                                 </div>
@@ -440,7 +656,7 @@ const Contest = () => {
                                                 
                                                 {contest.status === 'Upcoming' && (
                                                     <button 
-                                                        onClick={() => handleStartContest(contest.id)}
+                                                        onClick={() => handleStartContest(contest._id)}
                                                         className="flex items-center space-x-1 bg-purple-500/20 text-purple-400 px-3 py-2 rounded-lg hover:bg-purple-500/30 text-sm"
                                                     >
                                                         <HiPlay className="w-4 h-4" />
@@ -450,7 +666,7 @@ const Contest = () => {
                                                 
                                                 {contest.status === 'Active' && (
                                                     <button 
-                                                        onClick={() => handleEndContest(contest.id)}
+                                                        onClick={() => handleEndContest(contest._id)}
                                                         className="flex items-center space-x-1 bg-orange-500/20 text-orange-400 px-3 py-2 rounded-lg hover:bg-orange-500/30 text-sm"
                                                     >
                                                         <HiStop className="w-4 h-4" />
@@ -459,10 +675,6 @@ const Contest = () => {
                                                 )}
                                                 
                                                 <button 
-                                                    onClick={() => {
-                                                        setSelectedContest(contest);
-                                                        setShowEditModal(true);
-                                                    }}
                                                     className="flex items-center space-x-1 bg-yellow-500/20 text-yellow-400 px-3 py-2 rounded-lg hover:bg-yellow-500/30 text-sm"
                                                 >
                                                     <HiPencil className="w-4 h-4" />
@@ -470,7 +682,7 @@ const Contest = () => {
                                                 </button>
                                                 
                                                 <button 
-                                                    onClick={() => handleDeleteContest(contest.id)}
+                                                    onClick={() => handleDeleteContest(contest._id)}
                                                     className="flex items-center space-x-1 bg-red-500/20 text-red-400 px-3 py-2 rounded-lg hover:bg-red-500/30 text-sm"
                                                 >
                                                     <HiTrash className="w-4 h-4" />
@@ -491,7 +703,7 @@ const Contest = () => {
                         <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
                             <h2 className="text-2xl font-bold text-white mb-6">Currently Active Contests</h2>
                             
-                            {contests.filter(c => c.status === 'Active').length === 0 ? (
+                            {contests.filter(c => c.status === 'Active' && c.isActive).length === 0 ? (
                                 <div className="text-center py-12">
                                     <div className="w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
                                         <HiPlay className="text-3xl text-gray-400" />
@@ -501,8 +713,8 @@ const Contest = () => {
                                 </div>
                             ) : (
                                 <div className="space-y-4">
-                                    {contests.filter(c => c.status === 'Active').map(contest => (
-                                        <div key={contest.id} className="bg-green-500/10 border border-green-500/30 rounded-xl p-6">
+                                    {contests.filter(c => c.status === 'Active' && c.isActive).map(contest => (
+                                        <div key={contest._id} className="bg-green-500/10 border border-green-500/30 rounded-xl p-6">
                                             <div className="flex justify-between items-start">
                                                 <div>
                                                     <h3 className="text-xl font-bold text-white mb-2">{contest.title}</h3>
@@ -511,6 +723,12 @@ const Contest = () => {
                                                         <span className="text-green-400">🟢 Live Now</span>
                                                         <span className="text-gray-400">
                                                             {contest.participants.length} participants
+                                                        </span>
+                                                        <span className="text-gray-400">
+                                                            {contest.analytics.totalSubmissions} submissions
+                                                        </span>
+                                                        <span className="text-gray-400">
+                                                            Avg Score: {contest.analytics.averageScore.toFixed(1)}
                                                         </span>
                                                         <span className="text-gray-400">
                                                             Ends: {formatDate(contest.endDate)}
@@ -541,7 +759,7 @@ const Contest = () => {
                         <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
                             <h2 className="text-2xl font-bold text-white mb-6">Completed Contests</h2>
                             
-                            {contests.filter(c => c.status === 'Completed').length === 0 ? (
+                            {contests.filter(c => c.status === 'Completed' && c.isActive).length === 0 ? (
                                 <div className="text-center py-12">
                                     <div className="w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
                                         <HiStar className="text-3xl text-gray-400" />
@@ -551,8 +769,8 @@ const Contest = () => {
                                 </div>
                             ) : (
                                 <div className="grid gap-6">
-                                    {contests.filter(c => c.status === 'Completed').map(contest => (
-                                        <div key={contest.id} className="bg-gray-800/50 border border-gray-600 rounded-xl p-6">
+                                    {contests.filter(c => c.status === 'Completed' && c.isActive).map(contest => (
+                                        <div key={contest._id} className="bg-gray-800/50 border border-gray-600 rounded-xl p-6">
                                             <div className="flex justify-between items-start">
                                                 <div>
                                                     <h3 className="text-xl font-bold text-white mb-2">{contest.title}</h3>
@@ -561,6 +779,11 @@ const Contest = () => {
                                                         <span>Completed: {formatDate(contest.endDate)}</span>
                                                         <span>{contest.participants.length} participants</span>
                                                         <span>{contest.problems.length} problems</span>
+                                                        <span>{contest.analytics.totalSubmissions} total submissions</span>
+                                                        <span>Success Rate: {contest.analytics.totalSubmissions > 0 ? 
+                                                            ((contest.analytics.successfulSubmissions / contest.analytics.totalSubmissions) * 100).toFixed(1) + '%' : 
+                                                            '0%'}
+                                                        </span>
                                                     </div>
                                                 </div>
                                                 <div className="flex space-x-2">
@@ -595,17 +818,29 @@ const Contest = () => {
                                 <div className="space-y-3">
                                     <div className="flex justify-between">
                                         <span className="text-gray-400">Total Contests:</span>
-                                        <span className="text-white font-medium">{contests.length}</span>
+                                        <span className="text-white font-medium">{contests.filter(c => c.isActive).length}</span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-gray-400">Avg Participants:</span>
                                         <span className="text-white font-medium">
-                                            {Math.round(contests.reduce((sum, c) => sum + c.participants.length, 0) / contests.length) || 0}
+                                            {Math.round(contests.filter(c => c.isActive).reduce((sum, c) => sum + c.participants.length, 0) / contests.filter(c => c.isActive).length) || 0}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-400">Total Submissions:</span>
+                                        <span className="text-blue-400 font-medium">
+                                            {contests.filter(c => c.isActive).reduce((sum, c) => sum + c.analytics.totalSubmissions, 0)}
                                         </span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-gray-400">Success Rate:</span>
-                                        <span className="text-green-400 font-medium">78%</span>
+                                        <span className="text-green-400 font-medium">
+                                            {(() => {
+                                                const totalSubs = contests.filter(c => c.isActive).reduce((sum, c) => sum + c.analytics.totalSubmissions, 0);
+                                                const successSubs = contests.filter(c => c.isActive).reduce((sum, c) => sum + c.analytics.successfulSubmissions, 0);
+                                                return totalSubs > 0 ? ((successSubs / totalSubs) * 100).toFixed(1) + '%' : '0%';
+                                            })()}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -614,11 +849,14 @@ const Contest = () => {
                                 <h3 className="text-lg font-semibold text-white mb-4">Popular Problems</h3>
                                 <div className="space-y-2">
                                     {problems.slice(0, 4).map(problem => (
-                                        <div key={problem.id} className="flex justify-between items-center">
+                                        <div key={problem._id} className="flex justify-between items-center">
                                             <span className="text-gray-300 text-sm">{problem.title}</span>
-                                            <span className={`px-2 py-1 rounded text-xs ${getDifficultyColor(problem.difficulty)}`}>
-                                                {problem.difficulty}
-                                            </span>
+                                            <div className="flex items-center space-x-2">
+                                                <span className="text-yellow-400 text-xs">{problem.points}pts</span>
+                                                <span className={`px-2 py-1 rounded text-xs ${getDifficultyColor(problem.difficulty)}`}>
+                                                    {problem.difficulty}
+                                                </span>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -627,18 +865,28 @@ const Contest = () => {
                             <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
                                 <h3 className="text-lg font-semibold text-white mb-4">Department Participation</h3>
                                 <div className="space-y-3">
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-400">CSE:</span>
-                                        <span className="text-blue-400 font-medium">65%</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-400">IT:</span>
-                                        <span className="text-green-400 font-medium">25%</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-400">ECE:</span>
-                                        <span className="text-yellow-400 font-medium">10%</span>
-                                    </div>
+                                    {(() => {
+                                        const deptStats = {};
+                                        const totalParticipants = contests.filter(c => c.isActive).reduce((sum, c) => sum + c.participants.length, 0);
+                                        
+                                        contests.filter(c => c.isActive).forEach(contest => {
+                                            contest.participants.forEach(p => {
+                                                deptStats[p.department] = (deptStats[p.department] || 0) + 1;
+                                            });
+                                        });
+
+                                        return Object.entries(deptStats)
+                                            .sort(([,a], [,b]) => b - a)
+                                            .slice(0, 5)
+                                            .map(([dept, count]) => (
+                                                <div key={dept} className="flex justify-between">
+                                                    <span className="text-gray-400">{dept}:</span>
+                                                    <span className="text-blue-400 font-medium">
+                                                        {totalParticipants > 0 ? ((count / totalParticipants) * 100).toFixed(1) + '%' : '0%'}
+                                                    </span>
+                                                </div>
+                                            ));
+                                    })()}
                                 </div>
                             </div>
                         </div>
@@ -646,12 +894,12 @@ const Contest = () => {
                         <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
                             <h3 className="text-lg font-semibold text-white mb-4">Recent Activity</h3>
                             <div className="space-y-4">
-                                {contests.slice(0, 5).map(contest => (
-                                    <div key={contest.id} className="flex items-center justify-between py-3 border-b border-gray-700 last:border-b-0">
+                                {contests.filter(c => c.isActive).slice(0, 5).map(contest => (
+                                    <div key={contest._id} className="flex items-center justify-between py-3 border-b border-gray-700 last:border-b-0">
                                         <div>
                                             <h4 className="text-white font-medium">{contest.title}</h4>
                                             <p className="text-gray-400 text-sm">
-                                                {contest.participants.length} participants • Created {contest.createdAt}
+                                                {contest.participants.length} participants • {contest.analytics.totalSubmissions} submissions • Created {formatDate(contest.createdAt)}
                                             </p>
                                         </div>
                                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(contest.status)}`}>
@@ -706,7 +954,7 @@ const Contest = () => {
     );
 };
 
-// Create Contest Modal Component
+// Updated Create Contest Modal Component
 const CreateContestModal = ({ newContest, setNewContest, problems, students, getFilteredStudents, onSubmit, onClose }) => {
     const handleProblemSelection = (problemId) => {
         const updatedProblems = newContest.selectedProblems.includes(problemId)
@@ -725,7 +973,7 @@ const CreateContestModal = ({ newContest, setNewContest, problems, students, get
     };
 
     const selectAllFilteredStudents = () => {
-        const filteredIds = getFilteredStudents().map(s => s.id);
+        const filteredIds = getFilteredStudents().map(s => s._id);
         setNewContest({ ...newContest, selectedParticipants: filteredIds });
     };
 
@@ -740,7 +988,7 @@ const CreateContestModal = ({ newContest, setNewContest, problems, students, get
 
     return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
                 <div className="p-6 border-b border-gray-700">
                     <div className="flex justify-between items-center">
                         <h2 className="text-2xl font-bold text-white">Create New Contest</h2>
@@ -766,6 +1014,7 @@ const CreateContestModal = ({ newContest, setNewContest, problems, students, get
                                     onChange={(e) => setNewContest({...newContest, title: e.target.value})}
                                     className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white"
                                     placeholder="Enter contest title"
+                                    maxLength="200"
                                     required
                                 />
                             </div>
@@ -790,6 +1039,7 @@ const CreateContestModal = ({ newContest, setNewContest, problems, students, get
                                 rows="3"
                                 className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white"
                                 placeholder="Enter contest description"
+                                maxLength="1000"
                                 required
                             />
                         </div>
@@ -836,7 +1086,81 @@ const CreateContestModal = ({ newContest, setNewContest, problems, students, get
                                 rows="3"
                                 className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white"
                                 placeholder="Enter contest rules and guidelines"
+                                maxLength="2000"
                             />
+                        </div>
+                    </div>
+
+                    {/* Contest Settings */}
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-semibold text-white">Contest Settings</h3>
+                        <div className="grid md:grid-cols-2 gap-6">
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-sm font-medium text-gray-300">Allow Late Submission</label>
+                                    <input
+                                        type="checkbox"
+                                        checked={newContest.settings.allowLateSubmission}
+                                        onChange={(e) => setNewContest({
+                                            ...newContest,
+                                            settings: {...newContest.settings, allowLateSubmission: e.target.checked}
+                                        })}
+                                        className="w-4 h-4 text-purple-600"
+                                    />
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <label className="text-sm font-medium text-gray-300">Show Leaderboard</label>
+                                    <input
+                                        type="checkbox"
+                                        checked={newContest.settings.showLeaderboard}
+                                        onChange={(e) => setNewContest({
+                                            ...newContest,
+                                            settings: {...newContest.settings, showLeaderboard: e.target.checked}
+                                        })}
+                                        className="w-4 h-4 text-purple-600"
+                                    />
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <label className="text-sm font-medium text-gray-300">Show Leaderboard During Contest</label>
+                                    <input
+                                        type="checkbox"
+                                        checked={newContest.settings.showLeaderboardDuringContest}
+                                        onChange={(e) => setNewContest({
+                                            ...newContest,
+                                            settings: {...newContest.settings, showLeaderboardDuringContest: e.target.checked}
+                                        })}
+                                        className="w-4 h-4 text-purple-600"
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">Freeze Time (minutes before end)</label>
+                                    <input
+                                        type="number"
+                                        value={newContest.settings.freezeTime}
+                                        onChange={(e) => setNewContest({
+                                            ...newContest,
+                                            settings: {...newContest.settings, freezeTime: parseInt(e.target.value)}
+                                        })}
+                                        className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white"
+                                        min="0"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">Penalty per Wrong Submission</label>
+                                    <input
+                                        type="number"
+                                        value={newContest.settings.penaltyPerWrongSubmission}
+                                        onChange={(e) => setNewContest({
+                                            ...newContest,
+                                            settings: {...newContest.settings, penaltyPerWrongSubmission: parseInt(e.target.value)}
+                                        })}
+                                        className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white"
+                                        min="0"
+                                    />
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -845,11 +1169,11 @@ const CreateContestModal = ({ newContest, setNewContest, problems, students, get
                         <h3 className="text-lg font-semibold text-white">Select Problems</h3>
                         <div className="grid md:grid-cols-2 gap-4 max-h-60 overflow-y-auto">
                             {problems.map(problem => (
-                                <div key={problem.id} className="flex items-center space-x-3 bg-gray-800 p-4 rounded-lg">
+                                <div key={problem._id} className="flex items-center space-x-3 bg-gray-800 p-4 rounded-lg">
                                     <input
                                         type="checkbox"
-                                        checked={newContest.selectedProblems.includes(problem.id)}
-                                        onChange={() => handleProblemSelection(problem.id)}
+                                        checked={newContest.selectedProblems.includes(problem._id)}
+                                        onChange={() => handleProblemSelection(problem._id)}
                                         className="w-4 h-4 text-purple-600"
                                     />
                                     <div className="flex-1">
@@ -868,7 +1192,10 @@ const CreateContestModal = ({ newContest, setNewContest, problems, students, get
                             ))}
                         </div>
                         <p className="text-sm text-gray-400">
-                            Selected: {newContest.selectedProblems.length} problems
+                            Selected: {newContest.selectedProblems.length} problems (Total Points: {newContest.selectedProblems.reduce((sum, id) => {
+                                const problem = problems.find(p => p._id === id);
+                                return sum + (problem?.points || 0);
+                            }, 0)})
                         </p>
                     </div>
 
@@ -904,6 +1231,7 @@ const CreateContestModal = ({ newContest, setNewContest, problems, students, get
                                         className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white"
                                     >
                                         <option value="">All Departments</option>
+                                        <option value="AIML">AIML</option>
                                         <option value="CSE">CSE</option>
                                         <option value="IT">IT</option>
                                         <option value="ECE">ECE</option>
@@ -914,10 +1242,10 @@ const CreateContestModal = ({ newContest, setNewContest, problems, students, get
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300 mb-2">Semester</label>
                                     <select
-                                        value={newContest.filterCriteria.semester}
+                                        value={newContest.filterCriteria.semester || ''}
                                         onChange={(e) => setNewContest({
                                             ...newContest,
-                                            filterCriteria: {...newContest.filterCriteria, semester: e.target.value}
+                                            filterCriteria: {...newContest.filterCriteria, semester: e.target.value ? parseInt(e.target.value) : null}
                                         })}
                                         className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white"
                                     >
@@ -930,10 +1258,10 @@ const CreateContestModal = ({ newContest, setNewContest, problems, students, get
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300 mb-2">Division</label>
                                     <select
-                                        value={newContest.filterCriteria.division}
+                                        value={newContest.filterCriteria.division || ''}
                                         onChange={(e) => setNewContest({
                                             ...newContest,
-                                            filterCriteria: {...newContest.filterCriteria, division: e.target.value}
+                                            filterCriteria: {...newContest.filterCriteria, division: e.target.value ? parseInt(e.target.value) : null}
                                         })}
                                         className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white"
                                     >
@@ -954,7 +1282,7 @@ const CreateContestModal = ({ newContest, setNewContest, problems, students, get
                                         className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white"
                                     >
                                         <option value="">All Batches</option>
-                                        {['A1', 'B1', 'C1', 'A2', 'B2', 'C2', 'A3', 'B3', 'C3', 'A4', 'B4', 'C4'].map(batch => (
+                                        {['A1', 'B1', 'C1', 'D1', 'A2', 'B2', 'C2', 'D2', 'A3', 'B3', 'C3', 'D3', 'A4', 'B4', 'C4', 'D4'].map(batch => (
                                             <option key={batch} value={batch}>{batch}</option>
                                         ))}
                                     </select>
@@ -977,11 +1305,11 @@ const CreateContestModal = ({ newContest, setNewContest, problems, students, get
                             </div>
                             <div className="space-y-2">
                                 {getFilteredStudents().map(student => (
-                                    <div key={student.id} className="flex items-center space-x-3">
+                                    <div key={student._id} className="flex items-center space-x-3">
                                         <input
                                             type="checkbox"
-                                            checked={newContest.selectedParticipants.includes(student.id)}
-                                            onChange={() => handleParticipantSelection(student.id)}
+                                            checked={newContest.selectedParticipants.includes(student._id)}
+                                            onChange={() => handleParticipantSelection(student._id)}
                                             className="w-4 h-4 text-purple-600"
                                         />
                                         <div className="flex-1">
@@ -1022,11 +1350,11 @@ const CreateContestModal = ({ newContest, setNewContest, problems, students, get
     );
 };
 
-// Participants Modal Component
+// Updated Participants Modal Component
 const ParticipantsModal = ({ contest, onClose }) => {
     return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-4xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-6xl w-full max-h-[80vh] overflow-y-auto">
                 <div className="p-6 border-b border-gray-700">
                     <div className="flex justify-between items-center">
                         <h2 className="text-2xl font-bold text-white">Contest Participants</h2>
@@ -1041,10 +1369,13 @@ const ParticipantsModal = ({ contest, onClose }) => {
                 </div>
 
                 <div className="p-6">
-                    <div className="mb-4">
+                    <div className="mb-4 flex justify-between items-center">
                         <p className="text-white">
                             Total Participants: <span className="font-bold text-blue-400">{contest.participants.length}</span>
                         </p>
+                        <div className="text-sm text-gray-400">
+                            Registration Rate: {((contest.participants.length / contest.maxParticipants) * 100).toFixed(1)}%
+                        </div>
                     </div>
 
                     <div className="overflow-x-auto">
@@ -1056,11 +1387,13 @@ const ParticipantsModal = ({ contest, onClose }) => {
                                     <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Academic Info</th>
                                     <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Score</th>
                                     <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Submissions</th>
+                                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Problems Attempted</th>
+                                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Registration Time</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-700">
                                 {contest.participants.map((participant) => (
-                                    <tr key={participant.id} className="hover:bg-gray-800/50">
+                                    <tr key={participant.userId} className="hover:bg-gray-800/50">
                                         <td className="px-4 py-3">
                                             <div>
                                                 <div className="text-white font-medium">{participant.name}</div>
@@ -1079,6 +1412,14 @@ const ParticipantsModal = ({ contest, onClose }) => {
                                         <td className="px-4 py-3">
                                             <span className="text-blue-400">{participant.submissions || 0}</span>
                                         </td>
+                                        <td className="px-4 py-3">
+                                            <span className="text-purple-400">{participant.problemsAttempted?.length || 0}</span>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <span className="text-gray-400 text-sm">
+                                                {new Date(participant.registrationTime).toLocaleString()}
+                                            </span>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -1090,13 +1431,17 @@ const ParticipantsModal = ({ contest, onClose }) => {
     );
 };
 
-// Leaderboard Modal Component
+// Updated Leaderboard Modal Component
 const LeaderboardModal = ({ contest, onClose }) => {
-    const sortedParticipants = [...contest.participants].sort((a, b) => (b.score || 0) - (a.score || 0));
+    const sortedParticipants = [...contest.participants].sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if (a.submissions !== b.submissions) return a.submissions - b.submissions;
+        return new Date(a.lastActivityTime) - new Date(b.lastActivityTime);
+    });
 
     return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-4xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-6xl w-full max-h-[80vh] overflow-y-auto">
                 <div className="p-6 border-b border-gray-700">
                     <div className="flex justify-between items-center">
                         <h2 className="text-2xl font-bold text-white">Contest Leaderboard</h2>
@@ -1107,10 +1452,32 @@ const LeaderboardModal = ({ contest, onClose }) => {
                             ✕
                         </button>
                     </div>
-                    <p className="text-gray-400 mt-2">{contest.title}</p>
+                    <div className="flex justify-between items-center mt-2">
+                        <p className="text-gray-400">{contest.title}</p>
+                        <div className="text-sm text-gray-400">
+                            Status: <span className={`font-medium ${contest.status === 'Active' ? 'text-green-400' : 'text-gray-300'}`}>
+                                {contest.status}
+                            </span>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="p-6">
+                    <div className="mb-4 grid grid-cols-3 gap-4 text-center">
+                        <div className="bg-gray-800/50 rounded-lg p-4">
+                            <div className="text-2xl font-bold text-blue-400">{contest.participants.length}</div>
+                            <div className="text-gray-400 text-sm">Total Participants</div>
+                        </div>
+                        <div className="bg-gray-800/50 rounded-lg p-4">
+                            <div className="text-2xl font-bold text-green-400">{contest.analytics.totalSubmissions}</div>
+                            <div className="text-gray-400 text-sm">Total Submissions</div>
+                        </div>
+                        <div className="bg-gray-800/50 rounded-lg p-4">
+                            <div className="text-2xl font-bold text-purple-400">{contest.analytics.averageScore.toFixed(1)}</div>
+                            <div className="text-gray-400 text-sm">Average Score</div>
+                        </div>
+                    </div>
+
                     <div className="overflow-x-auto">
                         <table className="w-full">
                             <thead className="bg-gray-800">
@@ -1119,12 +1486,14 @@ const LeaderboardModal = ({ contest, onClose }) => {
                                     <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Participant</th>
                                     <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Score</th>
                                     <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Submissions</th>
+                                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Problems Solved</th>
                                     <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Department</th>
+                                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Last Activity</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-700">
                                 {sortedParticipants.map((participant, index) => (
-                                    <tr key={participant.id} className="hover:bg-gray-800/50">
+                                    <tr key={participant.userId} className="hover:bg-gray-800/50">
                                         <td className="px-4 py-3">
                                             <div className="flex items-center">
                                                 {index === 0 && <span className="text-yellow-400 mr-2">🥇</span>}
@@ -1149,7 +1518,17 @@ const LeaderboardModal = ({ contest, onClose }) => {
                                             <span className="text-blue-400">{participant.submissions || 0}</span>
                                         </td>
                                         <td className="px-4 py-3">
+                                            <span className="text-purple-400">
+                                                {participant.problemsAttempted?.filter(p => p.solved).length || 0} / {contest.problems.length}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3">
                                             <span className="text-gray-300">{participant.department}</span>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <span className="text-gray-400 text-sm">
+                                                {participant.lastActivityTime ? new Date(participant.lastActivityTime).toLocaleString() : 'Never'}
+                                            </span>
                                         </td>
                                     </tr>
                                 ))}
