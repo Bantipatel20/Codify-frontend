@@ -1,14 +1,54 @@
 // src/components/admin/AdminDashboard.js
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { HiOutlineClipboardList, HiUserGroup, HiChartBar, HiCog, HiLogout, HiSparkles, HiStar } from 'react-icons/hi';
+import { problemsAPI, userAPI } from '../../services/api';
 import ViewProblems from './ViewProblems';
 
 const AdminDashboard = () => {
     const navigate = useNavigate();
+    const [statistics, setStatistics] = useState({
+        totalProblems: 0,
+        totalStudents: 0,
+        totalSubmissions: 0,
+        successRate: 0,
+        todaySubmissions: 0,
+        activeStudents: 0
+    });
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        fetchDashboardData();
+    }, []);
+
+    const fetchDashboardData = async () => {
+        try {
+            setLoading(true);
+            
+            // Fetch problems statistics
+            const problemStats = await problemsAPI.getStatistics();
+            
+            // Fetch users data for student count
+            const usersData = await userAPI.getAllUsers({ limit: 1 });
+            
+            setStatistics({
+                totalProblems: problemStats.data?.totalProblems || 0,
+                totalStudents: usersData.totalUsers || 0,
+                totalSubmissions: problemStats.data?.submissions?.total || 0,
+                successRate: parseFloat(problemStats.data?.submissions?.successRate || 0),
+                todaySubmissions: Math.floor(Math.random() * 100), // Mock data - replace with actual API
+                activeStudents: Math.floor((usersData.totalUsers || 0) * 0.7) // Mock calculation
+            });
+        } catch (error) {
+            console.error('Error fetching dashboard data:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleLogout = () => {
         localStorage.removeItem('token');
+        localStorage.removeItem('user');
         navigate('/login');
     };
 
@@ -19,7 +59,7 @@ const AdminDashboard = () => {
             icon: HiOutlineClipboardList,
             link: '/admin/problems',
             color: 'from-violet-500 to-purple-600',
-            stats: '24 Problems'
+            stats: `${statistics.totalProblems} Problems`
         },
         {
             title: 'Student Hub',
@@ -27,7 +67,7 @@ const AdminDashboard = () => {
             icon: HiUserGroup,
             link: '/admin/students',
             color: 'from-emerald-500 to-teal-600',
-            stats: '156 Students'
+            stats: `${statistics.totalStudents} Students`
         },
         {
             title: 'Submission Analytics',
@@ -35,7 +75,7 @@ const AdminDashboard = () => {
             icon: HiChartBar,
             link: '/admin/submissions',
             color: 'from-orange-500 to-red-600',
-            stats: '1,247 Submissions'
+            stats: `${statistics.totalSubmissions} Submissions`
         },
         {
             title: 'System Settings',
@@ -45,17 +85,26 @@ const AdminDashboard = () => {
             color: 'from-slate-500 to-gray-600',
             stats: 'Latest Config'
         },
-
-{
-    title: 'Contest Management',
-    description: 'Create and manage programming contests',
-    icon: HiStar,
-    link: '/admin/contests',
-    color: 'from-yellow-500 to-orange-600',
-    stats: '3 Active'
-}
-
+        {
+            title: 'Contest Management',
+            description: 'Create and manage programming contests',
+            icon: HiStar,
+            link: '/admin/contests',
+            color: 'from-yellow-500 to-orange-600',
+            stats: '3 Active'
+        }
     ];
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+                <div className="text-center">
+                    <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-gray-400">Loading dashboard...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-gray-900 text-white">
@@ -84,7 +133,7 @@ const AdminDashboard = () => {
             </div>
 
             {/* Welcome Section */}
-            <div className="px-8 py-8 max-w-7xl mx- ">
+            <div className="px-8 py-8 max-w-7xl mx-auto">
                 <div className="text-center mb-12">
                     <h2 className="text-4xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
                         Welcome Back, Administrator
@@ -131,7 +180,7 @@ const AdminDashboard = () => {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-gray-400 text-sm mb-1">Active Students</p>
-                                <p className="text-2xl font-bold text-green-400">142</p>
+                                <p className="text-2xl font-bold text-green-400">{statistics.activeStudents}</p>
                             </div>
                             <div className="w-12 h-12 bg-green-500 bg-opacity-20 rounded-xl flex items-center justify-center">
                                 <HiUserGroup className="text-green-400 text-xl" />
@@ -143,7 +192,7 @@ const AdminDashboard = () => {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-gray-400 text-sm mb-1">Today's Submissions</p>
-                                <p className="text-2xl font-bold text-blue-400">67</p>
+                                <p className="text-2xl font-bold text-blue-400">{statistics.todaySubmissions}</p>
                             </div>
                             <div className="w-12 h-12 bg-blue-500 bg-opacity-20 rounded-xl flex items-center justify-center">
                                 <HiChartBar className="text-blue-400 text-xl" />
@@ -155,7 +204,7 @@ const AdminDashboard = () => {
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-gray-400 text-sm mb-1">Success Rate</p>
-                                <p className="text-2xl font-bold text-yellow-400">78%</p>
+                                <p className="text-2xl font-bold text-yellow-400">{statistics.successRate}%</p>
                             </div>
                             <div className="w-12 h-12 bg-yellow-500 bg-opacity-20 rounded-xl flex items-center justify-center">
                                 <HiSparkles className="text-yellow-400 text-xl" />
@@ -166,7 +215,7 @@ const AdminDashboard = () => {
 
                 {/* ViewProblems Component */}
                 <div className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden">
-                    <ViewProblems />
+                    <ViewProblems onDataUpdate={fetchDashboardData} />
                 </div>
             </div>
         </div>
