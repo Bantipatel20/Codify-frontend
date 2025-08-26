@@ -11,29 +11,77 @@ const LoginPage = () => {
     const [isLoading, setIsLoading] = useState(false);
     const navigate = useNavigate();
 
+    // Admin user ID for comparison
+    const ADMIN_USER_ID = '68ad4516c3be4979ebac1d49';
+
     const handleLogin = async (e) => {
         e.preventDefault();
         setError('');
         setIsLoading(true);
 
-        // Simulate loading
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        try {
+            console.log('🔄 Attempting login...');
+            
+            // Use direct backend URL to bypass proxy issues
+            const response = await fetch('http://localhost:5000/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    username: username,
+                    password: password
+                })
+            });
 
-        const validCredentials = {
-            admin: { username: 'admin', password: 'admin123' },
-            client: { username: 'user', password: 'user123' }
-        };
+            console.log('📡 Response status:', response.status);
 
-        if (username === validCredentials.admin.username && password === validCredentials.admin.password) {
-            const mockToken = btoa(JSON.stringify({ role: 'admin', username }));
-            localStorage.setItem('token', mockToken);
-            navigate('/admin/dashboard');
-        } else if (username === validCredentials.client.username && password === validCredentials.client.password) {
-            const mockToken = btoa(JSON.stringify({ role: 'client', username }));
-            localStorage.setItem('token', mockToken);
-            navigate('/client/dashboard');
-        } else {
-            setError('Invalid username or password');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            console.log('✅ Login response:', data);
+
+            if (data.success) {
+                // Store user information
+                localStorage.setItem('currentUser', username);
+                localStorage.setItem('userId', data.userId);
+                
+                const userData = {
+                    _id: data.userId,
+                    name: data.name || username,
+                    email: `${username}@example.com`,
+                    username: username,
+                    role: data.role
+                };
+                
+                localStorage.setItem('user', JSON.stringify(userData));
+                localStorage.setItem('token', btoa(JSON.stringify(userData)));
+                
+                console.log('🔍 User ID from response:', data.userId);
+                console.log('🔍 Admin ID for comparison:', ADMIN_USER_ID);
+                console.log('🔍 Is Admin?', data.userId === ADMIN_USER_ID);
+                
+                // Navigate based on user ID
+                if (data.userId === ADMIN_USER_ID) {
+                    console.log('✅ Navigating to admin dashboard');
+                    navigate('/admin/dashboard');
+                } else {
+                    console.log('✅ Navigating to client dashboard');
+                    navigate('/client/dashboard');
+                }
+            } else {
+                setError(data.error || 'Login failed');
+            }
+        } catch (error) {
+            console.error('❌ Login error:', error);
+            
+            if (error.message.includes('Failed to fetch')) {
+                setError('Cannot connect to backend server. Make sure it\'s running on port 5000.');
+            } else {
+                setError(`Login failed: ${error.message}`);
+            }
         }
         
         setIsLoading(false);
@@ -41,14 +89,12 @@ const LoginPage = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 flex items-center justify-center p-6">
-            {/* Background decoration */}
             <div className="absolute inset-0 overflow-hidden">
                 <div className="absolute top-1/4 left-10 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl"></div>
                 <div className="absolute bottom-1/4 right-10 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl"></div>
             </div>
 
             <div className="relative w-full max-w-md">
-                {/* Logo and Header */}
                 <div className="text-center mb-8">
                     <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl mb-4">
                         <HiCode className="text-2xl text-white" />
@@ -59,10 +105,8 @@ const LoginPage = () => {
                     <p className="text-gray-400">Sign in to continue your coding journey</p>
                 </div>
 
-                {/* Login Form */}
                 <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-8">
                     <form onSubmit={handleLogin} className="space-y-6">
-                        {/* Username Field */}
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">
                                 Username
@@ -80,7 +124,6 @@ const LoginPage = () => {
                             </div>
                         </div>
 
-                        {/* Password Field */}
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">
                                 Password
@@ -105,14 +148,12 @@ const LoginPage = () => {
                             </div>
                         </div>
 
-                        {/* Error Message */}
                         {error && (
                             <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-3">
                                 <p className="text-red-400 text-sm text-center">{error}</p>
                             </div>
                         )}
 
-                        {/* Login Button */}
                         <button 
                             type="submit" 
                             disabled={isLoading}
@@ -128,19 +169,8 @@ const LoginPage = () => {
                             )}
                         </button>
 
-                        {/* Forgot Password */}
-                        <div className="text-center">
-                            <button 
-                                type="button"
-                                onClick={() => alert("Forgot Password functionality not implemented yet")}
-                                className="text-blue-400 hover:text-blue-300 text-sm transition-colors duration-300"
-                            >
-                                Forgot your password?
-                            </button>
-                        </div>
+                        
                     </form>
-
-                    
                 </div>
             </div>
         </div>

@@ -23,34 +23,67 @@ const ProblemManagement = () => {
 
     const fetchCurrentUser = async () => {
         try {
-            // Try to get user from localStorage first
-            let user = authAPI.getCurrentUser();
+            // Get the current username from localStorage (set during login)
+            const currentUsername = localStorage.getItem('currentUser');
             
-            if (!user || !user._id) {
-                // If no user in localStorage, create a mock user for development
-                user = {
-                    _id: '507f1f77bcf86cd799439011', // Valid MongoDB ObjectId format
+            if (!currentUsername) {
+                console.log('No current user found, using mock admin user');
+                // Create mock admin user for development
+                const mockUser = {
+                    _id: '68ad4516c3be4979ebac1d49', // Your actual admin ID from database
                     name: 'Admin User',
-                    email: 'admin@example.com'
+                    email: 'admin@example.com',
+                    username: 'admin'
                 };
+                setCurrentUser(mockUser);
+                return;
+            }
+
+            // For admin, use the actual admin ID from your database
+            if (currentUsername === 'admin') {
+                const adminUser = {
+                    _id: '68ad4516c3be4979ebac1d49', // Your actual admin ID from database
+                    name: 'Admin User',
+                    email: 'admin@example.com',
+                    username: 'admin'
+                };
+                setCurrentUser(adminUser);
                 
-                // Store in localStorage
-                localStorage.setItem('user', JSON.stringify(user));
-                localStorage.setItem('token', btoa(`${user._id}:${Date.now()}`));
+                // Also store in localStorage for authAPI compatibility
+                authAPI.setCurrentUser(adminUser);
+                console.log('Admin user set:', adminUser);
+                return;
+            }
+
+            // For other users, try to get from authAPI or create mock
+            let user = authAPI.getCurrentUser();
+            if (!user) {
+                // Create mock user
+                user = {
+                    _id: '68ad4516c3be4979ebac1d49', // Fallback to admin ID
+                    name: currentUsername,
+                    email: `${currentUsername}@example.com`,
+                    username: currentUsername
+                };
+                authAPI.setCurrentUser(user);
             }
             
             setCurrentUser(user);
+            console.log('Current user set:', user);
+            
         } catch (error) {
             console.error('Error getting current user:', error);
             
-            // Fallback to mock user
-            const mockUser = {
-                _id: '507f1f77bcf86cd799439011',
+            // Fallback to admin user
+            const adminUser = {
+                _id: '68ad4516c3be4979ebac1d49', // Your actual admin ID
                 name: 'Admin User',
-                email: 'admin@example.com'
+                email: 'admin@example.com',
+                username: 'admin'
             };
-            setCurrentUser(mockUser);
-            localStorage.setItem('user', JSON.stringify(mockUser));
+            setCurrentUser(adminUser);
+            authAPI.setCurrentUser(adminUser);
+            console.log('Fallback admin user set:', adminUser);
         }
     };
 
@@ -119,10 +152,20 @@ const ProblemManagement = () => {
 
         setLoading(true);
         try {
+            // Prepare problem data
             const problemData = {
-                ...formData,
-                createdBy: currentUser._id
+                title: formData.title.trim(),
+                description: formData.description.trim(),
+                difficulty: formData.difficulty,
+                tags: formData.tags,
+                testCases: formData.testCases.map(tc => ({
+                    input: tc.input.trim(),
+                    output: tc.output.trim()
+                })),
+                createdBy: currentUser._id // Send the user ID string
             };
+
+            console.log('Submitting problem data:', problemData);
 
             let response;
             if (editingProblem) {
@@ -131,11 +174,14 @@ const ProblemManagement = () => {
                 response = await problemsAPI.createProblem(problemData);
             }
 
+            console.log('API Response:', response);
+
             if (response.success) {
                 alert(`Problem ${editingProblem ? 'updated' : 'created'} successfully!`);
                 resetForm();
                 setActiveTab('list');
             } else {
+                console.error('API Error:', response.error);
                 alert(`Failed to ${editingProblem ? 'update' : 'create'} problem: ${response.error || 'Unknown error'}`);
             }
         } catch (error) {
@@ -165,13 +211,15 @@ const ProblemManagement = () => {
             difficulty: problem.difficulty || 'Easy',
             tags: problem.tags || [],
             testCases: problem.testCases && problem.testCases.length > 0 
-                ? problem.testCases 
+                ? problem.testCases.map(tc => ({
+                    input: tc.input || '',
+                    output: tc.output || ''
+                  }))
                 : [{ input: '', output: '' }]
         });
         setActiveTab('create');
     };
 
-    // Rest of your component remains the same...
     const renderProblemForm = () => (
         <div className="bg-gray-800 border border-gray-700 rounded-2xl p-8">
             <div className="flex items-center justify-between mb-8">
@@ -369,6 +417,15 @@ const ProblemManagement = () => {
                         </button>
                     )}
                 </div>
+
+                {/* Debug Info - Remove in production */}
+                {process.env.NODE_ENV === 'development' && currentUser && (
+                    <div className="mb-4 p-3 bg-gray-800 border border-gray-700 rounded-lg">
+                        <p className="text-sm text-gray-400">
+                            <strong>Debug:</strong> Current User: {currentUser.name} (ID: {currentUser._id})
+                        </p>
+                    </div>
+                )}
 
                 {/* Content */}
                 {activeTab === 'list' ? (

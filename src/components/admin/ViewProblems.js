@@ -1,6 +1,6 @@
 // src/components/admin/ViewProblems.js
-import React, { useState, useEffect } from 'react';
-import { HiCode, HiTrash, HiPencil, HiEye, HiPlus, HiSearch, HiFilter } from 'react-icons/hi';
+import React, { useState, useEffect, useCallback } from 'react';
+import { HiCode, HiTrash, HiPencil, HiEye, HiPlus, HiSearch } from 'react-icons/hi';
 import { problemsAPI } from '../../services/api';
 
 const ViewProblems = ({ onDataUpdate, onEdit }) => {
@@ -20,12 +20,7 @@ const ViewProblems = ({ onDataUpdate, onEdit }) => {
     });
     const [pagination, setPagination] = useState({});
 
-    useEffect(() => {
-        fetchProblems();
-        fetchStatistics();
-    }, [filters]);
-
-    const fetchProblems = async () => {
+    const fetchProblems = useCallback(async () => {
         try {
             setLoading(true);
             const response = await problemsAPI.getAllProblems(filters);
@@ -40,9 +35,9 @@ const ViewProblems = ({ onDataUpdate, onEdit }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [filters]);
 
-    const fetchStatistics = async () => {
+    const fetchStatistics = useCallback(async () => {
         try {
             const response = await problemsAPI.getStatistics();
             
@@ -57,7 +52,12 @@ const ViewProblems = ({ onDataUpdate, onEdit }) => {
         } catch (error) {
             console.error('Error fetching statistics:', error);
         }
-    };
+    }, []);
+
+    useEffect(() => {
+        fetchProblems();
+        fetchStatistics();
+    }, [fetchProblems, fetchStatistics]);
 
     const handleDelete = async (id) => {
         if (window.confirm('Are you sure you want to delete this problem?')) {

@@ -1,22 +1,26 @@
+// src/setupProxy.js
 const { createProxyMiddleware } = require('http-proxy-middleware');
 
 module.exports = function(app) {
+  console.log('🔧 Proxy setup starting...');
+  
   app.use(
-    '/api',
+    ['/login', '/users', '/user', '/api'],
     createProxyMiddleware({
-      target: 'http://localhost:5000',  // Changed from Vercel to local server
+      target: 'http://localhost:5000',
       changeOrigin: true,
-      secure: false,  // Set to false for local development
-      pathRewrite: {
-        '^/api': '', // remove /api prefix when forwarding to target
-      },
+      secure: false,
       onError: (err, req, res) => {
-        console.log('Proxy Error:', err);
+        console.error('❌ Proxy Error:', err.message);
       },
       onProxyReq: (proxyReq, req, res) => {
-        console.log('Proxying request to:', proxyReq.path);
+        console.log(`🔄 Proxying: ${req.method} ${req.url} → http://localhost:5000${req.url}`);
       },
-      logLevel: 'debug'
+      onProxyRes: (proxyRes, req, res) => {
+        console.log(`✅ Response: ${proxyRes.statusCode} for ${req.method} ${req.url}`);
+      }
     })
   );
+  
+  console.log('✅ Proxy setup complete');
 };
