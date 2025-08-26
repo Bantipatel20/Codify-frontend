@@ -294,95 +294,190 @@ export const problemsAPI = {
   }
 };
 
-// Mock User APIs - since your backend doesn't have user endpoints yet
+// User APIs - Using your actual backend endpoints
 export const userAPI = {
-  // Mock implementation for dashboard statistics
+  // GET /users - Get all users with pagination and filtering
   getAllUsers: async (params = {}) => {
-    console.log('⚠️ Using mock user data - implement user endpoints on backend');
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Return consistent structure that matches what the dashboard expects
-    return {
-      success: true,
-      data: {
-        users: [], // Empty array of users
-        totalUsers: 25, // Mock total users count
-        pagination: {
-          currentPage: 1,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPrevPage: false
+    try {
+      const { page = 1, limit = 10, name, email } = params;
+      const queryParams = new URLSearchParams();
+      
+      queryParams.append('page', page.toString());
+      queryParams.append('limit', limit.toString());
+      
+      if (name) queryParams.append('name', name);
+      if (email) queryParams.append('email', email);
+      
+      const response = await fetch(`http://localhost:5000/users?${queryParams.toString()}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        return {
+          success: true,
+          data: {
+            users: data.data || [],
+            totalUsers: data.pagination?.totalUsers || 0,
+            pagination: data.pagination || {}
+          },
+          // Also include at root level for backward compatibility
+          users: data.data || [],
+          totalUsers: data.pagination?.totalUsers || 0,
+          pagination: data.pagination || {}
+        };
+      } else {
+        throw new Error(data.error || 'Failed to fetch users');
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      return {
+        success: false,
+        error: error.message,
+        data: {
+          users: [],
+          totalUsers: 0,
+          pagination: {}
         }
-      },
-      // Also include at root level for backward compatibility
-      users: [],
-      totalUsers: 25,
-      pagination: {
-        currentPage: 1,
-        totalPages: 1,
-        hasNextPage: false,
-        hasPrevPage: false
-      }
-    };
+      };
+    }
   },
   
-  // Mock other user methods
+  // GET /user/:id - Get user by ID
   getUserById: async (id) => {
-    console.log('⚠️ Using mock user data - implement user endpoints on backend');
-    await new Promise(resolve => setTimeout(resolve, 200));
-    
-    return {
-      success: true,
-      data: {
-        _id: id,
-        name: 'Mock User',
-        email: 'mock@example.com',
-        role: 'student',
-        department: 'Computer Science',
-        batch: '2024'
+    try {
+      const response = await fetch(`http://localhost:5000/user/${id}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        return {
+          success: true,
+          data: data.data
+        };
+      } else {
+        throw new Error(data.error || 'User not found');
       }
-    };
+    } catch (error) {
+      console.error('Error fetching user:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
   },
   
+  // POST /user - Create new user
   createUser: async (userData) => {
-    console.log('⚠️ Using mock user creation - implement user endpoints on backend');
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
-    return {
-      success: true,
-      data: {
-        ...userData,
-        _id: Date.now().toString(),
-        createdAt: new Date().toISOString()
+    try {
+      const response = await fetch('http://localhost:5000/user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData)
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        return {
+          success: true,
+          data: data.data,
+          message: data.message
+        };
+      } else {
+        throw new Error(data.error || 'Failed to create user');
       }
-    };
+    } catch (error) {
+      console.error('Error creating user:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
   },
   
+  // PUT /user/:id - Update user
   updateUser: async (id, userData) => {
-    console.log('⚠️ Using mock user update - implement user endpoints on backend');
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
-    return {
-      success: true,
-      data: {
-        ...userData,
-        _id: id,
-        updatedAt: new Date().toISOString()
+    try {
+      console.log('Updating user:', id, 'with data:', userData);
+      
+      const response = await fetch(`http://localhost:5000/user/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData)
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        return {
+          success: true,
+          data: data.data,
+          message: data.message
+        };
+      } else {
+        throw new Error(data.error || 'Failed to update user');
       }
-    };
+    } catch (error) {
+      console.error('Error updating user:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
   },
   
+  // DELETE /user/:id - Delete user
   deleteUser: async (id) => {
-    console.log('⚠️ Using mock user deletion - implement user endpoints on backend');
-    await new Promise(resolve => setTimeout(resolve, 200));
-    
-    return {
-      success: true,
-      message: 'User deleted successfully',
-      data: { _id: id }
-    };
+    try {
+      const response = await fetch(`http://localhost:5000/user/${id}`, {
+        method: 'DELETE'
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        return {
+          success: true,
+          message: data.message,
+          data: data.data
+        };
+      } else {
+        throw new Error(data.error || 'Failed to delete user');
+      }
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  },
+
+  // Additional helper methods for admin settings
+  updateAdminCredentials: async (adminId, credentials) => {
+    try {
+      return await userAPI.updateUser(adminId, credentials);
+    } catch (error) {
+      console.error('Error updating admin credentials:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  },
+
+  getAdminUser: async (adminId) => {
+    try {
+      return await userAPI.getUserById(adminId);
+    } catch (error) {
+      console.error('Error fetching admin user:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
   }
 };
 
@@ -402,7 +497,7 @@ export const authAPI = {
   // Real login using your backend
   login: async (username, password) => {
     try {
-      const response = await fetch('/login', {
+      const response = await fetch('http://localhost:5000/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -414,7 +509,7 @@ export const authAPI = {
       
       if (data.success) {
         const user = {
-          _id: username === 'admin' ? '68ad4516c3be4979ebac1d49' : Date.now().toString(),
+          _id: data.userId || (username === 'admin' ? '68ad4516c3be4979ebac1d49' : Date.now().toString()),
           name: data.name || username,
           email: `${username}@example.com`,
           username: username,
@@ -427,6 +522,7 @@ export const authAPI = {
         localStorage.setItem('user', JSON.stringify(user));
         localStorage.setItem('token', token);
         localStorage.setItem('currentUser', username);
+        localStorage.setItem('userId', user._id);
         
         return {
           success: true,
@@ -449,24 +545,38 @@ export const authAPI = {
     }
   },
   
-  // Mock register
+  // Register new user
   register: async (userData) => {
-    console.log('⚠️ Using mock register - implement auth endpoints on backend');
-    
-    const mockUser = {
-      _id: Date.now().toString(),
-      ...userData,
-      role: 'student'
-    };
-    
-    const token = btoa(JSON.stringify(mockUser));
-    
-    return {
-      success: true,
-      user: mockUser,
-      token: token,
-      message: 'Registration successful'
-    };
+    try {
+      const response = await userAPI.createUser(userData);
+      
+      if (response.success) {
+        const user = {
+          ...response.data,
+          role: 'student'
+        };
+        
+        const token = btoa(JSON.stringify(user));
+        
+        return {
+          success: true,
+          user: user,
+          token: token,
+          message: 'Registration successful'
+        };
+      } else {
+        return {
+          success: false,
+          error: response.error || 'Registration failed'
+        };
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      return {
+        success: false,
+        error: 'Network error during registration'
+      };
+    }
   },
   
   // Get current user from localStorage
@@ -492,39 +602,330 @@ export const authAPI = {
     const token = localStorage.getItem('token');
     const user = localStorage.getItem('user');
     return !!(token && user);
+  },
+
+  // Change password
+  changePassword: async (userId, currentPassword, newPassword) => {
+    try {
+      // You might want to create a specific endpoint for password changes
+      // For now, using the general update endpoint
+      const response = await userAPI.updateUser(userId, {
+        password: newPassword
+      });
+      
+      return response;
+    } catch (error) {
+      console.error('Error changing password:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
   }
 };
 
-// Rest of your API exports remain the same...
+// Contest APIs - Using your actual backend endpoints
+export const contestAPI = {
+  // GET /api/contests - Get all contests with pagination and filtering
+  getAllContests: async (params = {}) => {
+    try {
+      const { page = 1, limit = 10, status, search, createdBy, startDate, endDate } = params;
+      const queryParams = new URLSearchParams();
+      
+      queryParams.append('page', page.toString());
+      queryParams.append('limit', limit.toString());
+      
+      if (status) queryParams.append('status', status);
+      if (search) queryParams.append('search', search);
+      if (createdBy) queryParams.append('createdBy', createdBy);
+      if (startDate) queryParams.append('startDate', startDate);
+      if (endDate) queryParams.append('endDate', endDate);
+      
+      const response = await api.get(`/api/contests?${queryParams.toString()}`);
+      return {
+        success: true,
+        data: response.data.data || [],
+        pagination: response.data.pagination || {}
+      };
+    } catch (error) {
+      console.error('Error fetching contests:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+        data: []
+      };
+    }
+  },
+
+  // GET /api/contests/:id - Get contest by ID
+  getContestById: async (id) => {
+    try {
+      const response = await api.get(`/api/contests/${id}`);
+      return {
+        success: true,
+        data: response.data.data || response.data
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message
+      };
+    }
+  },
+
+  // POST /api/contests - Create new contest
+  createContest: async (contestData) => {
+    try {
+      // Validate required fields before sending
+      if (!contestData.title || !contestData.description) {
+        throw new Error('Title and description are required');
+      }
+      
+      if (!contestData.startDate || !contestData.endDate) {
+        throw new Error('Start date and end date are required');
+      }
+      
+      if (!contestData.problems || contestData.problems.length === 0) {
+        throw new Error('At least one problem is required');
+      }
+
+      // Ensure createdBy is set
+      let finalContestData = { ...contestData };
+      
+      if (!finalContestData.createdBy) {
+        // Use the admin ID as fallback
+        finalContestData.createdBy = '68ad4516c3be4979ebac1d49';
+        console.log('⚠️ No createdBy provided, using admin ID as fallback');
+      }
+      
+      console.log('Creating contest with data:', finalContestData);
+      
+      const response = await api.post('/api/contests', finalContestData);
+      return {
+        success: true,
+        data: response.data.data || response.data,
+        message: 'Contest created successfully'
+      };
+      
+    } catch (error) {
+      console.error('Error creating contest:', error);
+      return {
+        success: false,
+        error: error.response?.data?.error || error.response?.data?.message || error.message
+      };
+    }
+  },
+
+  // PUT /api/contests/:id - Update contest
+  updateContest: async (id, contestData) => {
+    try {
+      console.log('Updating contest with data:', contestData);
+      
+      const response = await api.put(`/api/contests/${id}`, contestData);
+      return {
+        success: true,
+        data: response.data.data || response.data,
+        message: 'Contest updated successfully'
+      };
+    } catch (error) {
+      console.error('Error updating contest:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message
+      };
+    }
+  },
+
+  // DELETE /api/contests/:id - Delete contest
+  deleteContest: async (id) => {
+    try {
+      await api.delete(`/api/contests/${id}`);
+      return {
+        success: true,
+        message: 'Contest deleted successfully'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message
+      };
+    }
+  },
+
+  // POST /api/contests/:id/register - Register participant to contest
+  registerParticipant: async (contestId, userId) => {
+    try {
+      const response = await api.post(`/api/contests/${contestId}/register`, { userId });
+      return {
+        success: true,
+        data: response.data.data || response.data,
+        message: 'Participant registered successfully'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message
+      };
+    }
+  },
+
+  // GET /api/contests/:id/leaderboard - Get contest leaderboard
+  getLeaderboard: async (contestId) => {
+    try {
+      const response = await api.get(`/api/contests/${contestId}/leaderboard`);
+      return {
+        success: true,
+        data: response.data.data || response.data
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message
+      };
+    }
+  },
+
+  // GET /api/contests/status/:status - Get contests by status
+  getContestsByStatus: async (status) => {
+    try {
+      const response = await api.get(`/api/contests/status/${status}`);
+      return {
+        success: true,
+        data: response.data.data || []
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+        data: []
+      };
+    }
+  },
+
+  // GET /api/contests/filter/upcoming - Get upcoming contests
+  getUpcomingContests: async () => {
+    try {
+      const response = await api.get('/api/contests/filter/upcoming');
+      return {
+        success: true,
+        data: response.data.data || []
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+        data: []
+      };
+    }
+  },
+
+  // GET /api/contests/filter/active - Get active contests
+  getActiveContests: async () => {
+    try {
+      const response = await api.get('/api/contests/filter/active');
+      return {
+        success: true,
+        data: response.data.data || []
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+        data: []
+      };
+    }
+  },
+
+  // POST /api/contests/:id/status - Update contest status
+  updateContestStatus: async (contestId, status) => {
+    try {
+      const response = await api.post(`/api/contests/${contestId}/status`, { status });
+      return {
+        success: true,
+        data: response.data.data || response.data,
+        message: 'Contest status updated successfully'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message
+      };
+    }
+  },
+
+  // GET /api/contests/:id/analytics - Get contest analytics
+  getContestAnalytics: async (contestId) => {
+    try {
+      const response = await api.get(`/api/contests/${contestId}/analytics`);
+      return {
+        success: true,
+        data: response.data.data || response.data
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message
+      };
+    }
+  }
+};
+
+// Compiler APIs
 export const compilerAPI = {
   getLanguages: async () => {
     console.log('⚠️ Compiler API not implemented yet');
     return {
       success: true,
-      data: ['javascript', 'python', 'java', 'cpp']
+      data: ['javascript', 'python', 'java', 'cpp', 'c', 'go', 'rust']
     };
   },
   
   compileCode: async (codeData) => {
     console.log('⚠️ Compiler API not implemented yet');
+    // Mock compilation result
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate compilation time
+    
     return {
       success: true,
       data: {
-        output: 'Mock output',
-        status: 'success'
+        output: 'Hello World!\nProgram executed successfully.',
+        status: 'success',
+        executionTime: '0.05s',
+        memoryUsed: '1.2MB'
+      }
+    };
+  },
+  
+  runCode: async (codeData) => {
+    console.log('⚠️ Code execution API not implemented yet');
+    return {
+      success: true,
+      data: {
+        output: 'Mock execution output',
+        status: 'success',
+        executionTime: '0.03s'
       }
     };
   }
 };
 
+// Submissions APIs
 export const submissionsAPI = {
   submitSolution: async (problemId, submissionData) => {
     console.log('⚠️ Submissions API not implemented yet');
+    // Mock submission result
+    await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate judging time
+    
     return {
       success: true,
       data: {
+        submissionId: Date.now().toString(),
         status: 'accepted',
-        score: 100
+        score: 100,
+        testCasesPassed: 5,
+        totalTestCases: 5,
+        executionTime: '0.12s',
+        memoryUsed: '2.1MB'
       }
     };
   },
@@ -534,29 +935,30 @@ export const submissionsAPI = {
     return {
       success: true,
       data: [],
-      pagination: {}
-    };
-  }
-};
-
-export const contestAPI = {
-  getAllContests: async (params = {}) => {
-    console.log('⚠️ Contest API not implemented yet');
-    return {
-      success: true,
-      data: []
+      pagination: {
+        currentPage: 1,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPrevPage: false
+      }
     };
   },
   
-  createContest: async (contestData) => {
-    console.log('⚠️ Contest API not implemented yet');
+  getSubmissionById: async (submissionId) => {
+    console.log('⚠️ Submissions API not implemented yet');
     return {
-      success: false,
-      message: 'Contest creation not implemented yet'
+      success: true,
+      data: {
+        id: submissionId,
+        status: 'accepted',
+        code: '// Mock code',
+        language: 'javascript'
+      }
     };
   }
 };
 
+// API Utilities
 export const apiUtils = {
   formatErrorMessage: (error) => {
     if (error.response?.data?.message) {
@@ -577,7 +979,48 @@ export const apiUtils = {
 
   isTimeoutError: (error) => {
     return error.code === 'ECONNABORTED';
+  },
+
+  // Helper to build query parameters
+  buildQueryParams: (params) => {
+    const queryParams = new URLSearchParams();
+    
+    Object.keys(params).forEach(key => {
+      if (params[key] !== null && params[key] !== undefined && params[key] !== '') {
+        queryParams.append(key, params[key].toString());
+      }
+    });
+    
+    return queryParams.toString();
+  },
+
+  // Helper to validate ObjectId format
+  isValidObjectId: (id) => {
+    return /^[0-9a-fA-F]{24}$/.test(id);
+  },
+
+  // Helper to handle API responses consistently
+  handleApiResponse: (response, defaultErrorMessage = 'Operation failed') => {
+    if (response.success) {
+      return response;
+    } else {
+      throw new Error(response.error || defaultErrorMessage);
+    }
   }
+};
+
+// Constants
+export const API_CONSTANTS = {
+  ADMIN_USER_ID: '68ad4516c3be4979ebac1d49',
+  DEFAULT_PAGE_SIZE: 10,
+  MAX_PAGE_SIZE: 100,
+  REQUEST_TIMEOUT: 30000,
+  SUPPORTED_LANGUAGES: ['javascript', 'python', 'java', 'cpp', 'c', 'go', 'rust'],
+  PROBLEM_DIFFICULTIES: ['Easy', 'Medium', 'Hard'],
+  USER_ROLES: ['admin', 'student', 'client'],
+  CONTEST_STATUSES: ['Upcoming', 'Active', 'Completed', 'Cancelled'],
+  DEPARTMENTS: ['AIML', 'CSE', 'IT', 'ECE', 'MECH', 'CIVIL'],
+  BATCHES: ['A1', 'B1', 'C1', 'D1', 'A2', 'B2', 'C2', 'D2', 'A3', 'B3', 'C3', 'D3', 'A4', 'B4', 'C4', 'D4']
 };
 
 export default api;

@@ -1,215 +1,682 @@
 // src/components/admin/Contest.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HiStar, HiPlus, HiUsers, HiCode, HiCalendar, HiClock, HiPencil, HiTrash, HiPlay, HiStop, HiChartBar, HiDownload, HiFilter } from 'react-icons/hi';
+import { contestAPI, problemsAPI, userAPI } from '../../services/api';
+
+// Modal Components
+const CreateContestModal = ({ 
+  newContest, 
+  setNewContest, 
+  problems, 
+  students, 
+  getFilteredStudents, 
+  onSubmit, 
+  onClose 
+}) => {
+  const [currentStep, setCurrentStep] = useState(1);
+  const totalSteps = 4;
+
+  const handleNext = () => {
+    if (currentStep < totalSteps) setCurrentStep(currentStep + 1);
+  };
+
+  const handlePrev = () => {
+    if (currentStep > 1) setCurrentStep(currentStep - 1);
+  };
+
+  const handleProblemToggle = (problemId) => {
+    const isSelected = newContest.selectedProblems.includes(problemId);
+    if (isSelected) {
+      setNewContest({
+        ...newContest,
+        selectedProblems: newContest.selectedProblems.filter(id => id !== problemId)
+      });
+    } else {
+      setNewContest({
+        ...newContest,
+        selectedProblems: [...newContest.selectedProblems, problemId]
+      });
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="p-6 border-b border-gray-700 flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-white">Create New Contest</h2>
+            <p className="text-gray-400">Step {currentStep} of {totalSteps}</p>
+          </div>
+          <button 
+            onClick={onClose}
+            className="text-gray-400 hover:text-white text-2xl"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="px-6 py-4">
+          <div className="w-full bg-gray-700 rounded-full h-2">
+            <div 
+              className="bg-gradient-to-r from-purple-500 to-pink-600 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${(currentStep / totalSteps) * 100}%` }}
+            ></div>
+          </div>
+        </div>
+
+        <form onSubmit={onSubmit}>
+          <div className="p-6">
+            {/* Step 1: Basic Information */}
+            {currentStep === 1 && (
+              <div className="space-y-6">
+                <h3 className="text-xl font-semibold text-white mb-4">Contest Details</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Contest Title *</label>
+                    <input
+                      type="text"
+                      value={newContest.title}
+                      onChange={(e) => setNewContest({...newContest, title: e.target.value})}
+                      className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
+                      placeholder="Enter contest title"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Duration *</label>
+                    <input
+                      type="text"
+                      value={newContest.duration}
+                      onChange={(e) => setNewContest({...newContest, duration: e.target.value})}
+                      className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
+                      placeholder="e.g., 2 hours"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Start Date *</label>
+                    <input
+                      type="datetime-local"
+                      value={newContest.startDate}
+                      onChange={(e) => setNewContest({...newContest, startDate: e.target.value})}
+                      className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">End Date *</label>
+                    <input
+                      type="datetime-local"
+                      value={newContest.endDate}
+                      onChange={(e) => setNewContest({...newContest, endDate: e.target.value})}
+                      className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Description *</label>
+                  <textarea
+                    value={newContest.description}
+                    onChange={(e) => setNewContest({...newContest, description: e.target.value})}
+                    className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white h-32"
+                    placeholder="Describe the contest..."
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Max Participants</label>
+                  <input
+                    type="number"
+                    value={newContest.maxParticipants}
+                    onChange={(e) => setNewContest({...newContest, maxParticipants: parseInt(e.target.value)})}
+                    className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
+                    min="1"
+                    max="1000"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Select Problems */}
+            {currentStep === 2 && (
+              <div className="space-y-6">
+                <h3 className="text-xl font-semibold text-white mb-4">
+                  Select Problems ({newContest.selectedProblems.length} selected)
+                </h3>
+                
+                <div className="max-h-96 overflow-y-auto space-y-3">
+                  {problems.map((problem) => (
+                    <div 
+                      key={problem._id}
+                      className={`p-4 rounded-lg border cursor-pointer transition-all ${
+                        newContest.selectedProblems.includes(problem._id)
+                          ? 'bg-purple-500/20 border-purple-500'
+                          : 'bg-gray-800/50 border-gray-600 hover:border-gray-500'
+                      }`}
+                      onClick={() => handleProblemToggle(problem._id)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <h4 className="text-white font-semibold">{problem.title}</h4>
+                          <div className="flex items-center space-x-4 mt-2">
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              problem.difficulty === 'Easy' ? 'bg-green-500/20 text-green-400' :
+                              problem.difficulty === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                              'bg-red-500/20 text-red-400'
+                            }`}>
+                              {problem.difficulty}
+                            </span>
+                            <span className="text-gray-400 text-sm">{problem.category}</span>
+                            <span className="text-purple-400 text-sm">{problem.points} points</span>
+                          </div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={newContest.selectedProblems.includes(problem._id)}
+                          onChange={() => handleProblemToggle(problem._id)}
+                          className="w-5 h-5 text-purple-600"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Participant Selection */}
+            {currentStep === 3 && (
+              <div className="space-y-6">
+                <h3 className="text-xl font-semibold text-white mb-4">Participant Selection</h3>
+                
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-6">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                      <span className="text-white text-sm">ℹ</span>
+                    </div>
+                    <div>
+                      <h4 className="text-white font-medium">Participant Registration</h4>
+                      <p className="text-gray-300 text-sm">
+                        Participants will be registered after the contest is created. You can manage registrations from the contest management page.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Registration Method</label>
+                    <select
+                      value={newContest.participantSelection}
+                      onChange={(e) => setNewContest({...newContest, participantSelection: e.target.value})}
+                      className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
+                    >
+                      <option value="manual">Manual Registration</option>
+                      <option value="department">Department Based</option>
+                      <option value="semester">Semester Based</option>
+                      <option value="division">Division Based</option>
+                      <option value="batch">Batch Based</option>
+                    </select>
+                  </div>
+                </div>
+
+                {newContest.participantSelection !== 'manual' && (
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Department</label>
+                      <select
+                        value={newContest.filterCriteria.department}
+                        onChange={(e) => setNewContest({
+                          ...newContest,
+                          filterCriteria: {...newContest.filterCriteria, department: e.target.value}
+                        })}
+                        className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
+                      >
+                        <option value="">All Departments</option>
+                        <option value="AIML">AIML</option>
+                        <option value="CSE">CSE</option>
+                        <option value="IT">IT</option>
+                        <option value="ECE">ECE</option>
+                        <option value="MECH">MECH</option>
+                        <option value="CIVIL">CIVIL</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Semester</label>
+                      <select
+                        value={newContest.filterCriteria.semester || ''}
+                        onChange={(e) => setNewContest({
+                          ...newContest,
+                          filterCriteria: {...newContest.filterCriteria, semester: e.target.value ? parseInt(e.target.value) : null}
+                        })}
+                        className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
+                      >
+                        <option value="">All Semesters</option>
+                        {[1,2,3,4,5,6,7,8].map(sem => (
+                          <option key={sem} value={sem}>{sem}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Division</label>
+                      <select
+                        value={newContest.filterCriteria.division || ''}
+                        onChange={(e) => setNewContest({
+                          ...newContest,
+                          filterCriteria: {...newContest.filterCriteria, division: e.target.value ? parseInt(e.target.value) : null}
+                        })}
+                        className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
+                      >
+                        <option value="">All Divisions</option>
+                        {[1,2,3,4].map(div => (
+                          <option key={div} value={div}>{div}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Batch</label>
+                      <select
+                        value={newContest.filterCriteria.batch}
+                        onChange={(e) => setNewContest({
+                          ...newContest,
+                          filterCriteria: {...newContest.filterCriteria, batch: e.target.value}
+                        })}
+                        className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
+                      >
+                        <option value="">All Batches</option>
+                        <option value="A1">A1</option>
+                        <option value="B1">B1</option>
+                        <option value="C1">C1</option>
+                        <option value="D1">D1</option>
+                        <option value="A2">A2</option>
+                        <option value="B2">B2</option>
+                        <option value="C2">C2</option>
+                        <option value="D2">D2</option>
+                        <option value="A3">A3</option>
+                        <option value="B3">B3</option>
+                        <option value="C3">C3</option>
+                        <option value="D3">D3</option>
+                        <option value="A4">A4</option>
+                        <option value="B4">B4</option>
+                        <option value="C4">C4</option>
+                        <option value="D4">D4</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-gray-800/50 border border-gray-600 rounded-lg p-4">
+                  <h4 className="text-white font-medium mb-2">Registration Summary</h4>
+                  <p className="text-gray-300 text-sm">
+                    Registration Method: <span className="text-blue-400 font-medium">{newContest.participantSelection}</span>
+                  </p>
+                  <p className="text-gray-300 text-sm">
+                    Max Participants: <span className="text-purple-400 font-medium">{newContest.maxParticipants}</span>
+                  </p>
+                  {newContest.participantSelection !== 'manual' && (
+                    <div className="mt-2 text-xs text-gray-400">
+                      <p>Filter Criteria:</p>
+                      <ul className="ml-4 list-disc">
+                        {newContest.filterCriteria.department && <li>Department: {newContest.filterCriteria.department}</li>}
+                        {newContest.filterCriteria.semester && <li>Semester: {newContest.filterCriteria.semester}</li>}
+                        {newContest.filterCriteria.division && <li>Division: {newContest.filterCriteria.division}</li>}
+                        {newContest.filterCriteria.batch && <li>Batch: {newContest.filterCriteria.batch}</li>}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Step 4: Settings */}
+            {currentStep === 4 && (
+              <div className="space-y-6">
+                <h3 className="text-xl font-semibold text-white mb-4">Contest Settings</h3>
+                
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg">
+                    <div>
+                      <h4 className="text-white font-medium">Show Leaderboard</h4>
+                      <p className="text-gray-400 text-sm">Display leaderboard to participants</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={newContest.settings.showLeaderboard}
+                      onChange={(e) => setNewContest({
+                        ...newContest,
+                        settings: {...newContest.settings, showLeaderboard: e.target.checked}
+                      })}
+                      className="w-5 h-5 text-purple-600"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg">
+                    <div>
+                      <h4 className="text-white font-medium">Show Leaderboard During Contest</h4>
+                      <p className="text-gray-400 text-sm">Allow participants to see rankings while contest is active</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={newContest.settings.showLeaderboardDuringContest}
+                      onChange={(e) => setNewContest({
+                        ...newContest,
+                        settings: {...newContest.settings, showLeaderboardDuringContest: e.target.checked}
+                      })}
+                      className="w-5 h-5 text-purple-600"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg">
+                    <div>
+                      <h4 className="text-white font-medium">Allow Late Submission</h4>
+                      <p className="text-gray-400 text-sm">Accept submissions after contest ends</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={newContest.settings.allowLateSubmission}
+                      onChange={(e) => setNewContest({
+                        ...newContest,
+                        settings: {...newContest.settings, allowLateSubmission: e.target.checked}
+                      })}
+                      className="w-5 h-5 text-purple-600"
+                    />
+                  </div>
+
+                  <div className="p-4 bg-gray-800/50 rounded-lg">
+                    <label className="block text-white font-medium mb-2">Penalty per Wrong Submission</label>
+                    <input
+                      type="number"
+                      value={newContest.settings.penaltyPerWrongSubmission}
+                      onChange={(e) => setNewContest({
+                        ...newContest,
+                        settings: {...newContest.settings, penaltyPerWrongSubmission: parseInt(e.target.value) || 0}
+                      })}
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+                      min="0"
+                      placeholder="0"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-white font-medium mb-2">Contest Rules</label>
+                    <textarea
+                      value={newContest.rules}
+                      onChange={(e) => setNewContest({...newContest, rules: e.target.value})}
+                      className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white h-32"
+                      placeholder="Enter contest rules and guidelines..."
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="p-6 border-t border-gray-700 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={handlePrev}
+              disabled={currentStep === 1}
+              className="px-6 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+
+            <div className="flex space-x-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-500"
+              >
+                Cancel
+              </button>
+
+              {currentStep < totalSteps ? (
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-lg hover:shadow-lg"
+                >
+                  Next
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  className="px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:shadow-lg"
+                >
+                  Create Contest
+                </button>
+              )}
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const ParticipantsModal = ({ contest, onClose }) => {
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-gray-700 flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-white">Contest Participants</h2>
+            <p className="text-gray-400">{contest.title}</p>
+          </div>
+          <button 
+            onClick={onClose}
+            className="text-gray-400 hover:text-white text-2xl"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="p-6">
+          <div className="mb-6">
+            <div className="flex items-center space-x-6 text-sm">
+              <span className="text-white">
+                Total Participants: <span className="text-blue-400 font-semibold">{contest.participants?.length || 0}</span>
+              </span>
+              <span className="text-white">
+                Max Capacity: <span className="text-purple-400 font-semibold">{contest.maxParticipants}</span>
+              </span>
+              <span className="text-white">
+                Registration: <span className="text-green-400 font-semibold">
+                  {contest.participantSelection === 'manual' ? 'Manual' : 'Automatic'}
+                </span>
+              </span>
+            </div>
+          </div>
+
+          {(!contest.participants || contest.participants.length === 0) ? (
+            <div className="text-center py-12">
+              <div className="w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                <HiUsers className="text-3xl text-gray-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-white mb-2">No Participants Yet</h3>
+              <p className="text-gray-400">Participants will appear here once they register</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {contest.participants.map((participant, index) => (
+                <div key={participant._id || index} className="bg-gray-800/50 border border-gray-600 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-600 rounded-full flex items-center justify-center">
+                        <span className="text-white font-semibold">
+                          {(participant.name || 'Unknown').charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <div>
+                        <h4 className="text-white font-medium">{participant.name || 'Unknown User'}</h4>
+                        <p className="text-gray-400 text-sm">
+                          {participant.email} • {participant.department} • Semester {participant.semester}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-gray-400 text-sm">Registered</p>
+                      <p className="text-green-400 text-sm">
+                        {participant.registrationTime ? 
+                          new Date(participant.registrationTime).toLocaleDateString() : 
+                          'Date unknown'
+                        }
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="p-6 border-t border-gray-700 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-lg hover:shadow-lg"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const LeaderboardModal = ({ contest, onClose }) => {
+  // Mock leaderboard data - replace with actual API call
+  const mockLeaderboard = contest.participants?.map((participant, index) => ({
+    rank: index + 1,
+    name: participant.name || 'Unknown User',
+    email: participant.email,
+    score: participant.score || Math.floor(Math.random() * 300) + 50,
+    solvedProblems: Math.floor(Math.random() * (contest.problems?.length || 3)) + 1,
+    totalProblems: contest.problems?.length || 3,
+    submissionTime: new Date(Date.now() - Math.random() * 3600000).toLocaleTimeString()
+  })).sort((a, b) => b.score - a.score).map((item, index) => ({...item, rank: index + 1})) || [];
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-gray-700 flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-white">Contest Leaderboard</h2>
+            <p className="text-gray-400">{contest.title}</p>
+          </div>
+          <button 
+            onClick={onClose}
+            className="text-gray-400 hover:text-white text-2xl"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="p-6">
+          {mockLeaderboard.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                <HiChartBar className="text-3xl text-gray-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-white mb-2">No Submissions Yet</h3>
+              <p className="text-gray-400">The leaderboard will update as participants submit solutions</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-700">
+                    <th className="text-left py-3 px-4 text-gray-300 font-semibold">Rank</th>
+                    <th className="text-left py-3 px-4 text-gray-300 font-semibold">Participant</th>
+                    <th className="text-center py-3 px-4 text-gray-300 font-semibold">Score</th>
+                    <th className="text-center py-3 px-4 text-gray-300 font-semibold">Solved</th>
+                    <th className="text-center py-3 px-4 text-gray-300 font-semibold">Last Submission</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mockLeaderboard.map((participant) => (
+                    <tr key={participant.email} className="border-b border-gray-800 hover:bg-gray-800/30">
+                      <td className="py-4 px-4">
+                        <div className="flex items-center space-x-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                            participant.rank === 1 ? 'bg-yellow-500 text-black' :
+                            participant.rank === 2 ? 'bg-gray-400 text-black' :
+                            participant.rank === 3 ? 'bg-amber-600 text-white' :
+                            'bg-gray-700 text-white'
+                          }`}>
+                            {participant.rank}
+                          </div>
+                          {participant.rank <= 3 && (
+                            <span className="text-yellow-400">
+                              {participant.rank === 1 ? '🥇' : participant.rank === 2 ? '🥈' : '🥉'}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-4 px-4">
+                        <div>
+                          <p className="text-white font-medium">{participant.name}</p>
+                          <p className="text-gray-400 text-sm">{participant.email}</p>
+                        </div>
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        <span className="text-2xl font-bold text-purple-400">{participant.score}</span>
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        <span className="text-green-400 font-semibold">
+                          {participant.solvedProblems}/{participant.totalProblems}
+                        </span>
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        <span className="text-gray-400 text-sm">{participant.submissionTime}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="p-6 border-t border-gray-700 flex justify-between items-center">
+          <div className="text-sm text-gray-400">
+            Last updated: {new Date().toLocaleString()}
+          </div>
+          <div className="flex space-x-3">
+            <button className="px-4 py-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30">
+              <HiDownload className="w-4 h-4 inline mr-2" />
+              Export CSV
+            </button>
+            <button
+              onClick={onClose}
+              className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-lg hover:shadow-lg"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const Contest = () => {
-    // Updated sample data to match schema
-    const [contests, setContests] = useState([
-        {
-            _id: '1',
-            title: 'Programming Contest 2024',
-            description: 'Annual programming contest for CSE students',
-            startDate: new Date('2024-02-15T10:00'),
-            endDate: new Date('2024-02-15T13:00'),
-            duration: '3 hours',
-            status: 'Upcoming',
-            rules: 'Standard ACM ICPC rules apply',
-            maxParticipants: 100,
-            problems: [
-                {
-                    problemId: '507f1f77bcf86cd799439011',
-                    title: 'Two Sum',
-                    difficulty: 'Easy',
-                    category: 'Array',
-                    points: 100,
-                    order: 1,
-                    solvedCount: 0,
-                    attemptCount: 0
-                },
-                {
-                    problemId: '507f1f77bcf86cd799439012',
-                    title: 'Binary Search',
-                    difficulty: 'Medium',
-                    category: 'Search',
-                    points: 200,
-                    order: 2,
-                    solvedCount: 0,
-                    attemptCount: 0
-                }
-            ],
-            participants: [
-                {
-                    userId: '507f1f77bcf86cd799439013',
-                    name: 'Banti',
-                    email: '23cs058@example.com',
-                    department: 'CSE',
-                    semester: 3,
-                    division: 1,
-                    batch: 'A1',
-                    score: 0,
-                    submissions: 0,
-                    problemsAttempted: [],
-                    registrationTime: new Date(),
-                    lastActivityTime: new Date()
-                },
-                {
-                    userId: '507f1f77bcf86cd799439014',
-                    name: 'Dhaval',
-                    email: '23cs060@example.com',
-                    department: 'CSE',
-                    semester: 3,
-                    division: 1,
-                    batch: 'B1',
-                    score: 0,
-                    submissions: 0,
-                    problemsAttempted: [],
-                    registrationTime: new Date(),
-                    lastActivityTime: new Date()
-                }
-            ],
-            participantSelection: 'manual',
-            filterCriteria: {
-                department: '',
-                semester: null,
-                division: null,
-                batch: ''
-            },
-            totalPoints: 300,
-            createdBy: '507f1f77bcf86cd799439015',
-            createdAt: new Date('2024-01-20'),
-            updatedAt: new Date('2024-01-20'),
-            analytics: {
-                totalSubmissions: 0,
-                successfulSubmissions: 0,
-                averageScore: 0,
-                participationRate: 0
-            },
-            settings: {
-                allowLateSubmission: false,
-                showLeaderboard: true,
-                showLeaderboardDuringContest: true,
-                freezeLeaderboard: false,
-                freezeTime: 60,
-                allowViewProblemsBeforeStart: false,
-                penaltyPerWrongSubmission: 0
-            },
-            isActive: true
-        },
-        {
-            _id: '2',
-            title: 'Data Structures Challenge',
-            description: 'Focus on advanced data structures',
-            startDate: new Date('2024-02-20T14:00'),
-            endDate: new Date('2024-02-20T17:00'),
-            duration: '3 hours',
-            status: 'Active',
-            rules: 'Time-based scoring system',
-            maxParticipants: 50,
-            problems: [
-                {
-                    problemId: '507f1f77bcf86cd799439016',
-                    title: 'Tree Traversal',
-                    difficulty: 'Medium',
-                    category: 'Tree',
-                    points: 150,
-                    order: 1,
-                    solvedCount: 1,
-                    attemptCount: 3
-                },
-                {
-                    problemId: '507f1f77bcf86cd799439017',
-                    title: 'Graph Algorithms',
-                    difficulty: 'Hard',
-                    category: 'Graph',
-                    points: 300,
-                    order: 2,
-                    solvedCount: 0,
-                    attemptCount: 2
-                }
-            ],
-            participants: [
-                {
-                    userId: '507f1f77bcf86cd799439018',
-                    name: 'Shashan',
-                    email: '23cs042@example.com',
-                    department: 'CSE',
-                    semester: 3,
-                    division: 2,
-                    batch: 'A2',
-                    score: 150,
-                    submissions: 3,
-                    problemsAttempted: [
-                        {
-                            problemId: '507f1f77bcf86cd799439016',
-                            attempts: 2,
-                            solved: true,
-                            score: 150,
-                            lastAttemptTime: new Date()
-                        },
-                        {
-                            problemId: '507f1f77bcf86cd799439017',
-                            attempts: 1,
-                            solved: false,
-                            score: 0,
-                            lastAttemptTime: new Date()
-                        }
-                    ],
-                    registrationTime: new Date(),
-                    lastActivityTime: new Date()
-                }
-            ],
-            participantSelection: 'manual',
-            filterCriteria: {
-                department: '',
-                semester: null,
-                division: null,
-                batch: ''
-            },
-            totalPoints: 450,
-            createdBy: '507f1f77bcf86cd799439015',
-            createdAt: new Date('2024-01-25'),
-            updatedAt: new Date('2024-01-25'),
-            analytics: {
-                totalSubmissions: 3,
-                successfulSubmissions: 1,
-                averageScore: 150,
-                participationRate: 2
-            },
-            settings: {
-                allowLateSubmission: false,
-                showLeaderboard: true,
-                showLeaderboardDuringContest: true,
-                freezeLeaderboard: false,
-                freezeTime: 60,
-                allowViewProblemsBeforeStart: false,
-                penaltyPerWrongSubmission: 10
-            },
-            isActive: true
-        }
-    ]);
-
-    // Updated problems list to match schema structure
-    const [problems] = useState([
-        { _id: '507f1f77bcf86cd799439011', title: 'Two Sum', difficulty: 'Easy', category: 'Array', points: 100 },
-        { _id: '507f1f77bcf86cd799439012', title: 'Add Two Numbers', difficulty: 'Medium', category: 'Linked List', points: 200 },
-        { _id: '507f1f77bcf86cd799439019', title: 'Longest Substring', difficulty: 'Medium', category: 'String', points: 200 },
-        { _id: '507f1f77bcf86cd799439020', title: 'Median of Arrays', difficulty: 'Hard', category: 'Array', points: 300 },
-        { _id: '507f1f77bcf86cd799439021', title: 'Binary Search', difficulty: 'Medium', category: 'Search', points: 150 },
-        { _id: '507f1f77bcf86cd799439016', title: 'Tree Traversal', difficulty: 'Medium', category: 'Tree', points: 150 },
-        { _id: '507f1f77bcf86cd799439017', title: 'Graph Algorithms', difficulty: 'Hard', category: 'Graph', points: 300 }
-    ]);
-
-    // Updated students list to match schema structure
-    const [students] = useState([
-        { _id: '507f1f77bcf86cd799439013', name: 'Banti', email: '23cs058@example.com', department: 'CSE', semester: 3, division: 1, batch: 'A1' },
-        { _id: '507f1f77bcf86cd799439014', name: 'Dhaval', email: '23cs060@example.com', department: 'CSE', semester: 3, division: 1, batch: 'B1' },
-        { _id: '507f1f77bcf86cd799439018', name: 'Shashan', email: '23cs042@example.com', department: 'CSE', semester: 3, division: 2, batch: 'A2' },
-        { _id: '507f1f77bcf86cd799439022', name: 'Raj', email: '23cs055@example.com', department: 'CSE', semester: 5, division: 1, batch: 'A1' },
-        { _id: '507f1f77bcf86cd799439023', name: 'Priya', email: '23it045@example.com', department: 'IT', semester: 3, division: 1, batch: 'B1' },
-        { _id: '507f1f77bcf86cd799439024', name: 'Amit', email: '23cs067@example.com', department: 'CSE', semester: 3, division: 1, batch: 'C1' }
-    ]);
-
     // State management
+    const [contests, setContests] = useState([]);
+    const [problems, setProblems] = useState([]);
+    const [students, setStudents] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('overview');
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showParticipantsModal, setShowParticipantsModal] = useState(false);
@@ -221,7 +688,7 @@ const Contest = () => {
         dateRange: 'All'
     });
 
-    // Updated new contest form state to match schema
+    // Updated new contest form state to match backend schema
     const [newContest, setNewContest] = useState({
         title: '',
         description: '',
@@ -232,7 +699,6 @@ const Contest = () => {
         maxParticipants: 100,
         selectedProblems: [],
         participantSelection: 'manual',
-        selectedParticipants: [],
         filterCriteria: {
             department: '',
             semester: null,
@@ -249,6 +715,66 @@ const Contest = () => {
             penaltyPerWrongSubmission: 0
         }
     });
+
+    // Load data on component mount
+    useEffect(() => {
+        const loadData = async () => {
+            setLoading(true);
+            try {
+                // Load contests, problems, and users concurrently
+                const [contestsResponse, problemsResponse, usersResponse] = await Promise.all([
+                    contestAPI.getAllContests(),
+                    problemsAPI.getAllProblems({ limit: 100 }),
+                    userAPI.getAllUsers({ limit: 100 })
+                ]);
+
+                if (contestsResponse.success) {
+                    setContests(contestsResponse.data);
+                }
+
+                if (problemsResponse.success) {
+                    // Transform problems to match expected format
+                    const transformedProblems = problemsResponse.data.map(problem => ({
+                        _id: problem._id,
+                        title: problem.title,
+                        difficulty: problem.difficulty,
+                        category: problem.category || 'General',
+                        points: problem.points || getDifficultyPoints(problem.difficulty)
+                    }));
+                    setProblems(transformedProblems);
+                }
+
+                if (usersResponse.success) {
+                    // Transform users to match expected format
+                    const transformedUsers = usersResponse.data.users.map(user => ({
+                        _id: user._id,
+                        name: user.name,
+                        email: user.email,
+                        department: user.department,
+                        semester: user.semester || 1,
+                        division: user.division || 1,
+                        batch: user.batch || 'A1'
+                    }));
+                    setStudents(transformedUsers);
+                }
+            } catch (error) {
+                console.error('Error loading initial data:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadData();
+    }, []);
+
+    const getDifficultyPoints = (difficulty) => {
+        switch (difficulty) {
+            case 'Easy': return 100;
+            case 'Medium': return 200;
+            case 'Hard': return 300;
+            default: return 100;
+        }
+    };
 
     // Utility functions
     const getStatusColor = (status) => {
@@ -274,73 +800,122 @@ const Contest = () => {
         return new Date(dateString).toLocaleString();
     };
 
-    // Updated contest management functions
-    const handleCreateContest = (e) => {
+    // Contest management functions - UPDATED
+    const handleCreateContest = async (e) => {
         e.preventDefault();
+        setLoading(true);
         
-        const selectedProblemsData = newContest.selectedProblems.map((problemId, index) => {
-            const problem = problems.find(p => p._id === problemId);
-            return {
-                problemId: problem._id,
-                title: problem.title,
-                difficulty: problem.difficulty,
-                category: problem.category,
-                points: problem.points,
-                order: index + 1,
-                solvedCount: 0,
-                attemptCount: 0
-            };
-        });
+        try {
+            // Validate required fields first
+            if (!newContest.title.trim()) {
+                throw new Error('Contest title is required');
+            }
+            
+            if (!newContest.description.trim()) {
+                throw new Error('Contest description is required');
+            }
+            
+            if (!newContest.startDate) {
+                throw new Error('Start date is required');
+            }
+            
+            if (!newContest.endDate) {
+                throw new Error('End date is required');
+            }
+            
+            if (!newContest.duration.trim()) {
+                throw new Error('Duration is required');
+            }
+            
+            if (new Date(newContest.startDate) >= new Date(newContest.endDate)) {
+                throw new Error('End date must be after start date');
+            }
+            
+            if (newContest.selectedProblems.length === 0) {
+                throw new Error('At least one problem must be selected');
+            }
 
-        const selectedParticipantsData = newContest.selectedParticipants.map(studentId => {
-            const student = students.find(s => s._id === studentId);
-            return {
-                userId: student._id,
-                name: student.name,
-                email: student.email,
-                department: student.department,
-                semester: student.semester,
-                division: student.division,
-                batch: student.batch,
-                score: 0,
-                submissions: 0,
-                problemsAttempted: [],
-                registrationTime: new Date(),
-                lastActivityTime: new Date()
-            };
-        });
+            // Prepare problems data for backend - match ContestProblemSchema exactly
+            const selectedProblemsData = newContest.selectedProblems.map((problemId, index) => {
+                const problem = problems.find(p => p._id === problemId);
+                if (!problem) {
+                    throw new Error(`Problem with ID ${problemId} not found`);
+                }
+                return {
+                    problemId: problem._id,
+                    title: problem.title,
+                    difficulty: problem.difficulty,
+                    category: problem.category || 'General',
+                    points: problem.points || getDifficultyPoints(problem.difficulty),
+                    order: index + 1,
+                    solvedCount: 0,
+                    attemptCount: 0
+                };
+            });
 
-        const contest = {
-            _id: (contests.length + 1).toString(),
-            title: newContest.title,
-            description: newContest.description,
-            startDate: new Date(newContest.startDate),
-            endDate: new Date(newContest.endDate),
-            duration: newContest.duration,
-            status: 'Upcoming',
-            rules: newContest.rules,
-            maxParticipants: newContest.maxParticipants,
-            problems: selectedProblemsData,
-            participants: selectedParticipantsData,
-            participantSelection: newContest.participantSelection,
-            filterCriteria: newContest.filterCriteria,
-            totalPoints: selectedProblemsData.reduce((sum, problem) => sum + problem.points, 0),
-            createdBy: '507f1f77bcf86cd799439015', // Current admin user ID
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            analytics: {
-                totalSubmissions: 0,
-                successfulSubmissions: 0,
-                averageScore: 0,
-                participationRate: 0
-            },
-            settings: newContest.settings,
-            isActive: true
-        };
-        
-        setContests([...contests, contest]);
-        resetNewContestForm();
-        setShowCreateModal(false);
+            // Prepare filter criteria - ensure it matches FilterCriteriaSchema
+            const filterCriteria = {
+                department: newContest.filterCriteria.department || '',
+                semester: newContest.filterCriteria.semester || undefined,
+                division: newContest.filterCriteria.division || undefined,
+                batch: newContest.filterCriteria.batch || ''
+            };
+
+            // Remove undefined values to avoid validation issues
+            Object.keys(filterCriteria).forEach(key => {
+                if (filterCriteria[key] === undefined) {
+                    delete filterCriteria[key];
+                }
+            });
+
+            // Prepare settings - ensure all boolean values are proper
+            const settings = {
+                allowLateSubmission: Boolean(newContest.settings.allowLateSubmission),
+                showLeaderboard: Boolean(newContest.settings.showLeaderboard),
+                showLeaderboardDuringContest: Boolean(newContest.settings.showLeaderboardDuringContest),
+                freezeLeaderboard: Boolean(newContest.settings.freezeLeaderboard),
+                freezeTime: parseInt(newContest.settings.freezeTime) || 60,
+                allowViewProblemsBeforeStart: Boolean(newContest.settings.allowViewProblemsBeforeStart),
+                penaltyPerWrongSubmission: parseInt(newContest.settings.penaltyPerWrongSubmission) || 0
+            };
+
+            // Prepare the contest data according to your backend schema
+            const contestData = {
+                title: newContest.title.trim(),
+                description: newContest.description.trim(),
+                startDate: new Date(newContest.startDate).toISOString(),
+                endDate: new Date(newContest.endDate).toISOString(),
+                duration: newContest.duration.trim(),
+                rules: newContest.rules.trim() || 'Standard contest rules apply',
+                maxParticipants: parseInt(newContest.maxParticipants) || 100,
+                problems: selectedProblemsData,
+                createdBy: localStorage.getItem('userId') || '68ad4516c3be4979ebac1d49',
+                participantSelection: newContest.participantSelection || 'manual',
+                filterCriteria: filterCriteria,
+                settings: settings
+                // Don't send participants array during creation - let backend handle it
+            };
+
+            console.log('📤 Sending contest data:', JSON.stringify(contestData, null, 2));
+
+            const response = await contestAPI.createContest(contestData);
+            
+            if (response.success) {
+                alert('Contest created successfully!');
+                resetNewContestForm();
+                setShowCreateModal(false);
+                // Reload contests
+                window.location.reload();
+            } else {
+                console.error('❌ Contest creation failed:', response);
+                alert(`Failed to create contest: ${response.error}`);
+            }
+        } catch (error) {
+            console.error('❌ Error creating contest:', error);
+            alert(`Error creating contest: ${error.message}`);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const resetNewContestForm = () => {
@@ -354,7 +929,6 @@ const Contest = () => {
             maxParticipants: 100,
             selectedProblems: [],
             participantSelection: 'manual',
-            selectedParticipants: [],
             filterCriteria: {
                 department: '',
                 semester: null,
@@ -373,25 +947,54 @@ const Contest = () => {
         });
     };
 
-    const handleDeleteContest = (contestId) => {
+    const handleDeleteContest = async (contestId) => {
         if (window.confirm('Are you sure you want to delete this contest?')) {
-            setContests(contests.filter(c => c._id !== contestId));
+            try {
+                const response = await contestAPI.deleteContest(contestId);
+                if (response.success) {
+                    alert('Contest deleted successfully!');
+                    window.location.reload();
+                } else {
+                    alert(`Failed to delete contest: ${response.error}`);
+                }
+            } catch (error) {
+                console.error('Error deleting contest:', error);
+                alert(`Error deleting contest: ${error.message}`);
+            }
         }
     };
 
-    const handleStartContest = (contestId) => {
-        setContests(contests.map(c => 
-            c._id === contestId ? { ...c, status: 'Active', updatedAt: new Date() } : c
-        ));
+    const handleStartContest = async (contestId) => {
+        try {
+            const response = await contestAPI.updateContestStatus(contestId, 'Active');
+            if (response.success) {
+                alert('Contest started successfully!');
+                window.location.reload();
+            } else {
+                alert(`Failed to start contest: ${response.error}`);
+            }
+        } catch (error) {
+            console.error('Error starting contest:', error);
+            alert(`Error starting contest: ${error.message}`);
+        }
     };
 
-    const handleEndContest = (contestId) => {
-        setContests(contests.map(c => 
-            c._id === contestId ? { ...c, status: 'Completed', updatedAt: new Date() } : c
-        ));
+    const handleEndContest = async (contestId) => {
+        try {
+            const response = await contestAPI.updateContestStatus(contestId, 'Completed');
+            if (response.success) {
+                alert('Contest ended successfully!');
+                window.location.reload();
+            } else {
+                alert(`Failed to end contest: ${response.error}`);
+            }
+        } catch (error) {
+            console.error('Error ending contest:', error);
+            alert(`Error ending contest: ${error.message}`);
+        }
     };
 
-    // Updated filter function to match schema
+    // Filter function
     const getFilteredStudents = () => {
         if (newContest.participantSelection === 'manual') return students;
         
@@ -406,8 +1009,7 @@ const Contest = () => {
 
     const filteredContests = contests.filter(contest => {
         return (filters.status === 'All' || contest.status === filters.status) &&
-               (filters.department === 'All' || contest.participants.some(p => p.department === filters.department)) &&
-               contest.isActive;
+               (filters.department === 'All' || contest.participants?.some(p => p.department === filters.department));
     });
 
     const tabs = [
@@ -416,6 +1018,17 @@ const Contest = () => {
         { id: 'completed', name: 'Completed', icon: HiChartBar },
         { id: 'analytics', name: 'Analytics', icon: HiChartBar }
     ];
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-white text-xl">Loading contests...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-8">
@@ -475,7 +1088,7 @@ const Contest = () => {
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <p className="text-gray-400 text-sm mb-1">Total Contests</p>
-                                        <p className="text-3xl font-bold text-white">{contests.filter(c => c.isActive).length}</p>
+                                        <p className="text-3xl font-bold text-white">{contests.length}</p>
                                     </div>
                                     <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
                                         <HiStar className="text-blue-400 text-xl" />
@@ -488,7 +1101,7 @@ const Contest = () => {
                                     <div>
                                         <p className="text-gray-400 text-sm mb-1">Active Contests</p>
                                         <p className="text-3xl font-bold text-green-400">
-                                            {contests.filter(c => c.status === 'Active' && c.isActive).length}
+                                            {contests.filter(c => c.status === 'Active').length}
                                         </p>
                                     </div>
                                     <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center">
@@ -502,7 +1115,7 @@ const Contest = () => {
                                     <div>
                                         <p className="text-gray-400 text-sm mb-1">Total Participants</p>
                                         <p className="text-3xl font-bold text-purple-400">
-                                            {contests.filter(c => c.isActive).reduce((sum, c) => sum + c.participants.length, 0)}
+                                            {contests.reduce((sum, c) => sum + (c.participants?.length || 0), 0)}
                                         </p>
                                     </div>
                                     <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center">
@@ -516,7 +1129,7 @@ const Contest = () => {
                                     <div>
                                         <p className="text-gray-400 text-sm mb-1">Total Submissions</p>
                                         <p className="text-3xl font-bold text-yellow-400">
-                                            {contests.filter(c => c.isActive).reduce((sum, c) => sum + c.analytics.totalSubmissions, 0)}
+                                            {contests.reduce((sum, c) => sum + (c.analytics?.totalSubmissions || 0), 0)}
                                         </p>
                                     </div>
                                     <div className="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center">
@@ -585,114 +1198,130 @@ const Contest = () => {
                                 <h2 className="text-2xl font-bold text-white">All Contests ({filteredContests.length})</h2>
                             </div>
                             
-                            <div className="divide-y divide-gray-600">
-                                {filteredContests.map((contest) => (
-                                    <div key={contest._id} className="p-6 hover:bg-gray-700/30 transition-all duration-300">
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex-1">
-                                                <div className="flex items-center space-x-4 mb-3">
-                                                    <h3 className="text-xl font-bold text-white">{contest.title}</h3>
-                                                    <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(contest.status)}`}>
-                                                        {contest.status}
-                                                    </span>
-                                                </div>
-                                                
-                                                <p className="text-gray-300 mb-4 max-w-2xl">{contest.description}</p>
-                                                
-                                                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
-                                                    <div className="flex items-center space-x-2 text-sm text-gray-400">
-                                                        <HiCalendar className="w-4 h-4" />
-                                                        <span>{formatDate(contest.startDate)}</span>
-                                                    </div>
-                                                    <div className="flex items-center space-x-2 text-sm text-gray-400">
-                                                        <HiClock className="w-4 h-4" />
-                                                        <span>{contest.duration}</span>
-                                                    </div>
-                                                    <div className="flex items-center space-x-2 text-sm text-gray-400">
-                                                        <HiUsers className="w-4 h-4" />
-                                                        <span>{contest.participants.length}/{contest.maxParticipants}</span>
-                                                    </div>
-                                                    <div className="flex items-center space-x-2 text-sm text-gray-400">
-                                                        <HiCode className="w-4 h-4" />
-                                                        <span>{contest.problems.length} problems</span>
-                                                    </div>
-                                                    <div className="flex items-center space-x-2 text-sm text-gray-400">
-                                                        <HiChartBar className="w-4 h-4" />
-                                                        <span>{contest.analytics.totalSubmissions} submissions</span>
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex flex-wrap gap-2">
-                                                    {contest.problems.map((problem, index) => (
-                                                        <span key={index} className={`px-2 py-1 rounded text-xs font-medium ${getDifficultyColor(problem.difficulty)}`}>
-                                                            {problem.title} ({problem.points}pts)
+                            {filteredContests.length === 0 ? (
+                                <div className="p-12 text-center">
+                                    <div className="w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <HiStar className="text-3xl text-gray-400" />
+                                    </div>
+                                    <h3 className="text-xl font-semibold text-white mb-2">No Contests Found</h3>
+                                    <p className="text-gray-400 mb-6">Create your first contest to get started</p>
+                                    <button 
+                                        onClick={() => setShowCreateModal(true)}
+                                        className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all duration-300"
+                                    >
+                                        Create Contest
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="divide-y divide-gray-600">
+                                    {filteredContests.map((contest) => (
+                                        <div key={contest._id} className="p-6 hover:bg-gray-700/30 transition-all duration-300">
+                                            <div className="flex items-start justify-between">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center space-x-4 mb-3">
+                                                        <h3 className="text-xl font-bold text-white">{contest.title}</h3>
+                                                        <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(contest.status)}`}>
+                                                            {contest.status}
                                                         </span>
-                                                    ))}
+                                                    </div>
+                                                    
+                                                    <p className="text-gray-300 mb-4 max-w-2xl">{contest.description}</p>
+                                                    
+                                                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
+                                                        <div className="flex items-center space-x-2 text-sm text-gray-400">
+                                                            <HiCalendar className="w-4 h-4" />
+                                                            <span>{formatDate(contest.startDate)}</span>
+                                                        </div>
+                                                        <div className="flex items-center space-x-2 text-sm text-gray-400">
+                                                            <HiClock className="w-4 h-4" />
+                                                            <span>{contest.duration}</span>
+                                                        </div>
+                                                        <div className="flex items-center space-x-2 text-sm text-gray-400">
+                                                            <HiUsers className="w-4 h-4" />
+                                                            <span>{contest.participants?.length || 0}/{contest.maxParticipants}</span>
+                                                        </div>
+                                                        <div className="flex items-center space-x-2 text-sm text-gray-400">
+                                                            <HiCode className="w-4 h-4" />
+                                                            <span>{contest.problems?.length || 0} problems</span>
+                                                        </div>
+                                                        <div className="flex items-center space-x-2 text-sm text-gray-400">
+                                                            <HiChartBar className="w-4 h-4" />
+                                                            <span>{contest.analytics?.totalSubmissions || 0} submissions</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {contest.problems?.map((problem, index) => (
+                                                            <span key={index} className={`px-2 py-1 rounded text-xs font-medium ${getDifficultyColor(problem.difficulty)}`}>
+                                                                {problem.title} ({problem.points}pts)
+                                                            </span>
+                                                        ))}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            
-                                            <div className="flex flex-col space-y-2 ml-6">
-                                                <button 
-                                                    onClick={() => {
-                                                        setSelectedContest(contest);
-                                                        setShowParticipantsModal(true);
-                                                    }}
-                                                    className="flex items-center space-x-1 bg-blue-500/20 text-blue-400 px-3 py-2 rounded-lg hover:bg-blue-500/30 text-sm"
-                                                >
-                                                    <HiUsers className="w-4 h-4" />
-                                                    <span>Participants</span>
-                                                </button>
                                                 
-                                                <button 
-                                                    onClick={() => {
-                                                        setSelectedContest(contest);
-                                                        setShowLeaderboardModal(true);
-                                                    }}
-                                                    className="flex items-center space-x-1 bg-green-500/20 text-green-400 px-3 py-2 rounded-lg hover:bg-green-500/30 text-sm"
-                                                >
-                                                    <HiChartBar className="w-4 h-4" />
-                                                    <span>Leaderboard</span>
-                                                </button>
-                                                
-                                                {contest.status === 'Upcoming' && (
+                                                <div className="flex flex-col space-y-2 ml-6">
                                                     <button 
-                                                        onClick={() => handleStartContest(contest._id)}
-                                                        className="flex items-center space-x-1 bg-purple-500/20 text-purple-400 px-3 py-2 rounded-lg hover:bg-purple-500/30 text-sm"
+                                                        onClick={() => {
+                                                            setSelectedContest(contest);
+                                                            setShowParticipantsModal(true);
+                                                        }}
+                                                        className="flex items-center space-x-1 bg-blue-500/20 text-blue-400 px-3 py-2 rounded-lg hover:bg-blue-500/30 text-sm"
                                                     >
-                                                        <HiPlay className="w-4 h-4" />
-                                                        <span>Start</span>
+                                                        <HiUsers className="w-4 h-4" />
+                                                        <span>Participants</span>
                                                     </button>
-                                                )}
-                                                
-                                                {contest.status === 'Active' && (
+                                                    
                                                     <button 
-                                                        onClick={() => handleEndContest(contest._id)}
-                                                        className="flex items-center space-x-1 bg-orange-500/20 text-orange-400 px-3 py-2 rounded-lg hover:bg-orange-500/30 text-sm"
+                                                        onClick={() => {
+                                                            setSelectedContest(contest);
+                                                            setShowLeaderboardModal(true);
+                                                        }}
+                                                        className="flex items-center space-x-1 bg-green-500/20 text-green-400 px-3 py-2 rounded-lg hover:bg-green-500/30 text-sm"
                                                     >
-                                                        <HiStop className="w-4 h-4" />
-                                                        <span>End</span>
+                                                        <HiChartBar className="w-4 h-4" />
+                                                        <span>Leaderboard</span>
                                                     </button>
-                                                )}
-                                                
-                                                <button 
-                                                    className="flex items-center space-x-1 bg-yellow-500/20 text-yellow-400 px-3 py-2 rounded-lg hover:bg-yellow-500/30 text-sm"
-                                                >
-                                                    <HiPencil className="w-4 h-4" />
-                                                    <span>Edit</span>
-                                                </button>
-                                                
-                                                <button 
-                                                    onClick={() => handleDeleteContest(contest._id)}
-                                                    className="flex items-center space-x-1 bg-red-500/20 text-red-400 px-3 py-2 rounded-lg hover:bg-red-500/30 text-sm"
-                                                >
-                                                    <HiTrash className="w-4 h-4" />
-                                                    <span>Delete</span>
-                                                </button>
+                                                    
+                                                    {contest.status === 'Upcoming' && (
+                                                        <button 
+                                                            onClick={() => handleStartContest(contest._id)}
+                                                            className="flex items-center space-x-1 bg-purple-500/20 text-purple-400 px-3 py-2 rounded-lg hover:bg-purple-500/30 text-sm"
+                                                        >
+                                                            <HiPlay className="w-4 h-4" />
+                                                            <span>Start</span>
+                                                        </button>
+                                                    )}
+                                                    
+                                                    {contest.status === 'Active' && (
+                                                        <button 
+                                                            onClick={() => handleEndContest(contest._id)}
+                                                            className="flex items-center space-x-1 bg-orange-500/20 text-orange-400 px-3 py-2 rounded-lg hover:bg-orange-500/30 text-sm"
+                                                        >
+                                                            <HiStop className="w-4 h-4" />
+                                                            <span>End</span>
+                                                        </button>
+                                                    )}
+                                                    
+                                                    <button 
+                                                        className="flex items-center space-x-1 bg-yellow-500/20 text-yellow-400 px-3 py-2 rounded-lg hover:bg-yellow-500/30 text-sm"
+                                                    >
+                                                        <HiPencil className="w-4 h-4" />
+                                                        <span>Edit</span>
+                                                    </button>
+                                                    
+                                                    <button 
+                                                        onClick={() => handleDeleteContest(contest._id)}
+                                                        className="flex items-center space-x-1 bg-red-500/20 text-red-400 px-3 py-2 rounded-lg hover:bg-red-500/30 text-sm"
+                                                    >
+                                                        <HiTrash className="w-4 h-4" />
+                                                        <span>Delete</span>
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
-                            </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
@@ -703,7 +1332,7 @@ const Contest = () => {
                         <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
                             <h2 className="text-2xl font-bold text-white mb-6">Currently Active Contests</h2>
                             
-                            {contests.filter(c => c.status === 'Active' && c.isActive).length === 0 ? (
+                            {contests.filter(c => c.status === 'Active').length === 0 ? (
                                 <div className="text-center py-12">
                                     <div className="w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
                                         <HiPlay className="text-3xl text-gray-400" />
@@ -713,7 +1342,7 @@ const Contest = () => {
                                 </div>
                             ) : (
                                 <div className="space-y-4">
-                                    {contests.filter(c => c.status === 'Active' && c.isActive).map(contest => (
+                                    {contests.filter(c => c.status === 'Active').map(contest => (
                                         <div key={contest._id} className="bg-green-500/10 border border-green-500/30 rounded-xl p-6">
                                             <div className="flex justify-between items-start">
                                                 <div>
@@ -722,13 +1351,13 @@ const Contest = () => {
                                                     <div className="flex items-center space-x-6 text-sm">
                                                         <span className="text-green-400">🟢 Live Now</span>
                                                         <span className="text-gray-400">
-                                                            {contest.participants.length} participants
+                                                            {contest.participants?.length || 0} participants
                                                         </span>
                                                         <span className="text-gray-400">
-                                                            {contest.analytics.totalSubmissions} submissions
+                                                            {contest.analytics?.totalSubmissions || 0} submissions
                                                         </span>
                                                         <span className="text-gray-400">
-                                                            Avg Score: {contest.analytics.averageScore.toFixed(1)}
+                                                            Avg Score: {contest.analytics?.averageScore?.toFixed(1) || 0}
                                                         </span>
                                                         <span className="text-gray-400">
                                                             Ends: {formatDate(contest.endDate)}
@@ -753,53 +1382,50 @@ const Contest = () => {
                     </div>
                 )}
 
-                {/* Completed Contests Tab */}
+                {/* Completed Tab */}
                 {activeTab === 'completed' && (
                     <div className="space-y-6">
                         <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
                             <h2 className="text-2xl font-bold text-white mb-6">Completed Contests</h2>
                             
-                            {contests.filter(c => c.status === 'Completed' && c.isActive).length === 0 ? (
+                            {contests.filter(c => c.status === 'Completed').length === 0 ? (
                                 <div className="text-center py-12">
                                     <div className="w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                                        <HiStar className="text-3xl text-gray-400" />
+                                        <HiChartBar className="text-3xl text-gray-400" />
                                     </div>
                                     <h3 className="text-xl font-semibold text-white mb-2">No Completed Contests</h3>
                                     <p className="text-gray-400">Completed contests will appear here</p>
                                 </div>
                             ) : (
-                                <div className="grid gap-6">
-                                    {contests.filter(c => c.status === 'Completed' && c.isActive).map(contest => (
-                                        <div key={contest._id} className="bg-gray-800/50 border border-gray-600 rounded-xl p-6">
+                                <div className="space-y-4">
+                                    {contests.filter(c => c.status === 'Completed').map(contest => (
+                                        <div key={contest._id} className="bg-gray-500/10 border border-gray-500/30 rounded-xl p-6">
                                             <div className="flex justify-between items-start">
                                                 <div>
                                                     <h3 className="text-xl font-bold text-white mb-2">{contest.title}</h3>
                                                     <p className="text-gray-300 mb-4">{contest.description}</p>
-                                                    <div className="flex items-center space-x-6 text-sm text-gray-400">
-                                                        <span>Completed: {formatDate(contest.endDate)}</span>
-                                                        <span>{contest.participants.length} participants</span>
-                                                        <span>{contest.problems.length} problems</span>
-                                                        <span>{contest.analytics.totalSubmissions} total submissions</span>
-                                                        <span>Success Rate: {contest.analytics.totalSubmissions > 0 ? 
-                                                            ((contest.analytics.successfulSubmissions / contest.analytics.totalSubmissions) * 100).toFixed(1) + '%' : 
-                                                            '0%'}
+                                                    <div className="flex items-center space-x-6 text-sm">
+                                                        <span className="text-gray-400">✅ Completed</span>
+                                                        <span className="text-gray-400">
+                                                            {contest.participants?.length || 0} participants
+                                                        </span>
+                                                        <span className="text-gray-400">
+                                                            {contest.analytics?.totalSubmissions || 0} submissions
+                                                        </span>
+                                                        <span className="text-gray-400">
+                                                            Ended: {formatDate(contest.endDate)}
                                                         </span>
                                                     </div>
                                                 </div>
-                                                <div className="flex space-x-2">
-                                                    <button 
-                                                        onClick={() => {
-                                                            setSelectedContest(contest);
-                                                            setShowLeaderboardModal(true);
-                                                        }}
-                                                        className="bg-blue-500/20 text-blue-400 px-4 py-2 rounded-lg hover:bg-blue-500/30"
-                                                    >
-                                                        Final Results
-                                                    </button>
-                                                    <button className="bg-green-500/20 text-green-400 px-4 py-2 rounded-lg hover:bg-green-500/30">
-                                                        Export Report
-                                                    </button>
-                                                </div>
+                                                <button 
+                                                    onClick={() => {
+                                                        setSelectedContest(contest);
+                                                        setShowLeaderboardModal(true);
+                                                    }}
+                                                    className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-500"
+                                                >
+                                                    View Results
+                                                </button>
                                             </div>
                                         </div>
                                     ))}
@@ -812,101 +1438,41 @@ const Contest = () => {
                 {/* Analytics Tab */}
                 {activeTab === 'analytics' && (
                     <div className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
-                                <h3 className="text-lg font-semibold text-white mb-4">Contest Statistics</h3>
-                                <div className="space-y-3">
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-400">Total Contests:</span>
-                                        <span className="text-white font-medium">{contests.filter(c => c.isActive).length}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-400">Avg Participants:</span>
-                                        <span className="text-white font-medium">
-                                            {Math.round(contests.filter(c => c.isActive).reduce((sum, c) => sum + c.participants.length, 0) / contests.filter(c => c.isActive).length) || 0}
-                                        </span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-400">Total Submissions:</span>
-                                        <span className="text-blue-400 font-medium">
-                                            {contests.filter(c => c.isActive).reduce((sum, c) => sum + c.analytics.totalSubmissions, 0)}
-                                        </span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-400">Success Rate:</span>
-                                        <span className="text-green-400 font-medium">
-                                            {(() => {
-                                                const totalSubs = contests.filter(c => c.isActive).reduce((sum, c) => sum + c.analytics.totalSubmissions, 0);
-                                                const successSubs = contests.filter(c => c.isActive).reduce((sum, c) => sum + c.analytics.successfulSubmissions, 0);
-                                                return totalSubs > 0 ? ((successSubs / totalSubs) * 100).toFixed(1) + '%' : '0%';
-                                            })()}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
-                                <h3 className="text-lg font-semibold text-white mb-4">Popular Problems</h3>
-                                <div className="space-y-2">
-                                    {problems.slice(0, 4).map(problem => (
-                                        <div key={problem._id} className="flex justify-between items-center">
-                                            <span className="text-gray-300 text-sm">{problem.title}</span>
-                                            <div className="flex items-center space-x-2">
-                                                <span className="text-yellow-400 text-xs">{problem.points}pts</span>
-                                                <span className={`px-2 py-1 rounded text-xs ${getDifficultyColor(problem.difficulty)}`}>
-                                                    {problem.difficulty}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
-                                <h3 className="text-lg font-semibold text-white mb-4">Department Participation</h3>
-                                <div className="space-y-3">
-                                    {(() => {
-                                        const deptStats = {};
-                                        const totalParticipants = contests.filter(c => c.isActive).reduce((sum, c) => sum + c.participants.length, 0);
-                                        
-                                        contests.filter(c => c.isActive).forEach(contest => {
-                                            contest.participants.forEach(p => {
-                                                deptStats[p.department] = (deptStats[p.department] || 0) + 1;
-                                            });
-                                        });
-
-                                        return Object.entries(deptStats)
-                                            .sort(([,a], [,b]) => b - a)
-                                            .slice(0, 5)
-                                            .map(([dept, count]) => (
-                                                <div key={dept} className="flex justify-between">
-                                                    <span className="text-gray-400">{dept}:</span>
-                                                    <span className="text-blue-400 font-medium">
-                                                        {totalParticipants > 0 ? ((count / totalParticipants) * 100).toFixed(1) + '%' : '0%'}
-                                                    </span>
-                                                </div>
-                                            ));
-                                    })()}
-                                </div>
-                            </div>
-                        </div>
-
                         <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
-                            <h3 className="text-lg font-semibold text-white mb-4">Recent Activity</h3>
-                            <div className="space-y-4">
-                                {contests.filter(c => c.isActive).slice(0, 5).map(contest => (
-                                    <div key={contest._id} className="flex items-center justify-between py-3 border-b border-gray-700 last:border-b-0">
-                                        <div>
-                                            <h4 className="text-white font-medium">{contest.title}</h4>
-                                            <p className="text-gray-400 text-sm">
-                                                {contest.participants.length} participants • {contest.analytics.totalSubmissions} submissions • Created {formatDate(contest.createdAt)}
-                                            </p>
-                                        </div>
-                                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(contest.status)}`}>
-                                            {contest.status}
-                                        </span>
-                                    </div>
-                                ))}
+                            <h2 className="text-2xl font-bold text-white mb-6">Contest Analytics</h2>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                                <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30 rounded-xl p-6">
+                                    <h3 className="text-lg font-semibold text-white mb-2">Average Participation</h3>
+                                    <p className="text-3xl font-bold text-blue-400">
+                                        {contests.length > 0 ? 
+                                            Math.round(contests.reduce((sum, c) => sum + (c.participants?.length || 0), 0) / contests.length) : 0
+                                        }
+                                    </p>
+                                    <p className="text-gray-400 text-sm">participants per contest</p>
+                                </div>
+
+                                <div className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30 rounded-xl p-6">
+                                    <h3 className="text-lg font-semibold text-white mb-2">Success Rate</h3>
+                                    <p className="text-3xl font-bold text-green-400">
+                                        {contests.filter(c => c.status === 'Completed').length > 0 ? '85%' : '0%'}
+                                    </p>
+                                    <p className="text-gray-400 text-sm">contest completion rate</p>
+                                </div>
+
+                                <div className="bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-500/30 rounded-xl p-6">
+                                    <h3 className="text-lg font-semibold text-white mb-2">Avg Duration</h3>
+                                    <p className="text-3xl font-bold text-yellow-400">2.5h</p>
+                                    <p className="text-gray-400 text-sm">average contest duration</p>
+                                </div>
+                            </div>
+
+                            <div className="text-center py-12">
+                                <div className="w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <HiChartBar className="text-3xl text-gray-400" />
+                                </div>
+                                <h3 className="text-xl font-semibold text-white mb-2">Detailed Analytics Coming Soon</h3>
+                                <p className="text-gray-400">Advanced analytics and reporting features will be available soon</p>
                             </div>
                         </div>
                     </div>
@@ -950,593 +1516,6 @@ const Contest = () => {
                     }}
                 />
             )}
-        </div>
-    );
-};
-
-// Updated Create Contest Modal Component
-const CreateContestModal = ({ newContest, setNewContest, problems, students, getFilteredStudents, onSubmit, onClose }) => {
-    const handleProblemSelection = (problemId) => {
-        const updatedProblems = newContest.selectedProblems.includes(problemId)
-            ? newContest.selectedProblems.filter(p => p !== problemId)
-            : [...newContest.selectedProblems, problemId];
-        
-        setNewContest({ ...newContest, selectedProblems: updatedProblems });
-    };
-
-    const handleParticipantSelection = (studentId) => {
-        const updatedParticipants = newContest.selectedParticipants.includes(studentId)
-            ? newContest.selectedParticipants.filter(p => p !== studentId)
-            : [...newContest.selectedParticipants, studentId];
-        
-        setNewContest({ ...newContest, selectedParticipants: updatedParticipants });
-    };
-
-    const selectAllFilteredStudents = () => {
-        const filteredIds = getFilteredStudents().map(s => s._id);
-        setNewContest({ ...newContest, selectedParticipants: filteredIds });
-    };
-
-    const getDifficultyColor = (difficulty) => {
-        switch (difficulty) {
-            case 'Easy': return 'bg-green-500/20 text-green-400';
-            case 'Medium': return 'bg-yellow-500/20 text-yellow-400';
-            case 'Hard': return 'bg-red-500/20 text-red-400';
-            default: return 'bg-gray-500/20 text-gray-400';
-        }
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
-                <div className="p-6 border-b border-gray-700">
-                    <div className="flex justify-between items-center">
-                        <h2 className="text-2xl font-bold text-white">Create New Contest</h2>
-                        <button 
-                            onClick={onClose}
-                            className="text-gray-400 hover:text-white"
-                        >
-                            ✕
-                        </button>
-                    </div>
-                </div>
-
-                <form onSubmit={onSubmit} className="p-6 space-y-6">
-                    {/* Basic Information */}
-                    <div className="space-y-4">
-                        <h3 className="text-lg font-semibold text-white">Basic Information</h3>
-                        <div className="grid md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-2">Contest Title</label>
-                                <input
-                                    type="text"
-                                    value={newContest.title}
-                                    onChange={(e) => setNewContest({...newContest, title: e.target.value})}
-                                    className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white"
-                                    placeholder="Enter contest title"
-                                    maxLength="200"
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-2">Max Participants</label>
-                                <input
-                                    type="number"
-                                    value={newContest.maxParticipants}
-                                    onChange={(e) => setNewContest({...newContest, maxParticipants: parseInt(e.target.value)})}
-                                    className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white"
-                                    min="1"
-                                    required
-                                />
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">Description</label>
-                            <textarea
-                                value={newContest.description}
-                                onChange={(e) => setNewContest({...newContest, description: e.target.value})}
-                                rows="3"
-                                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white"
-                                placeholder="Enter contest description"
-                                maxLength="1000"
-                                required
-                            />
-                        </div>
-
-                        <div className="grid md:grid-cols-3 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-2">Start Date & Time</label>
-                                <input
-                                    type="datetime-local"
-                                    value={newContest.startDate}
-                                    onChange={(e) => setNewContest({...newContest, startDate: e.target.value})}
-                                    className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white"
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-2">End Date & Time</label>
-                                <input
-                                    type="datetime-local"
-                                    value={newContest.endDate}
-                                    onChange={(e) => setNewContest({...newContest, endDate: e.target.value})}
-                                    className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white"
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-2">Duration</label>
-                                <input
-                                    type="text"
-                                    value={newContest.duration}
-                                    onChange={(e) => setNewContest({...newContest, duration: e.target.value})}
-                                    className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white"
-                                    placeholder="e.g., 3 hours"
-                                    required
-                                />
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">Contest Rules</label>
-                            <textarea
-                                value={newContest.rules}
-                                onChange={(e) => setNewContest({...newContest, rules: e.target.value})}
-                                rows="3"
-                                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white"
-                                placeholder="Enter contest rules and guidelines"
-                                maxLength="2000"
-                            />
-                        </div>
-                    </div>
-
-                    {/* Contest Settings */}
-                    <div className="space-y-4">
-                        <h3 className="text-lg font-semibold text-white">Contest Settings</h3>
-                        <div className="grid md:grid-cols-2 gap-6">
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <label className="text-sm font-medium text-gray-300">Allow Late Submission</label>
-                                    <input
-                                        type="checkbox"
-                                        checked={newContest.settings.allowLateSubmission}
-                                        onChange={(e) => setNewContest({
-                                            ...newContest,
-                                            settings: {...newContest.settings, allowLateSubmission: e.target.checked}
-                                        })}
-                                        className="w-4 h-4 text-purple-600"
-                                    />
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <label className="text-sm font-medium text-gray-300">Show Leaderboard</label>
-                                    <input
-                                        type="checkbox"
-                                        checked={newContest.settings.showLeaderboard}
-                                        onChange={(e) => setNewContest({
-                                            ...newContest,
-                                            settings: {...newContest.settings, showLeaderboard: e.target.checked}
-                                        })}
-                                        className="w-4 h-4 text-purple-600"
-                                    />
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <label className="text-sm font-medium text-gray-300">Show Leaderboard During Contest</label>
-                                    <input
-                                        type="checkbox"
-                                        checked={newContest.settings.showLeaderboardDuringContest}
-                                        onChange={(e) => setNewContest({
-                                            ...newContest,
-                                            settings: {...newContest.settings, showLeaderboardDuringContest: e.target.checked}
-                                        })}
-                                        className="w-4 h-4 text-purple-600"
-                                    />
-                                </div>
-                            </div>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">Freeze Time (minutes before end)</label>
-                                    <input
-                                        type="number"
-                                        value={newContest.settings.freezeTime}
-                                        onChange={(e) => setNewContest({
-                                            ...newContest,
-                                            settings: {...newContest.settings, freezeTime: parseInt(e.target.value)}
-                                        })}
-                                        className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white"
-                                        min="0"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">Penalty per Wrong Submission</label>
-                                    <input
-                                        type="number"
-                                        value={newContest.settings.penaltyPerWrongSubmission}
-                                        onChange={(e) => setNewContest({
-                                            ...newContest,
-                                            settings: {...newContest.settings, penaltyPerWrongSubmission: parseInt(e.target.value)}
-                                        })}
-                                        className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white"
-                                        min="0"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Problem Selection */}
-                    <div className="space-y-4">
-                        <h3 className="text-lg font-semibold text-white">Select Problems</h3>
-                        <div className="grid md:grid-cols-2 gap-4 max-h-60 overflow-y-auto">
-                            {problems.map(problem => (
-                                <div key={problem._id} className="flex items-center space-x-3 bg-gray-800 p-4 rounded-lg">
-                                    <input
-                                        type="checkbox"
-                                        checked={newContest.selectedProblems.includes(problem._id)}
-                                        onChange={() => handleProblemSelection(problem._id)}
-                                        className="w-4 h-4 text-purple-600"
-                                    />
-                                    <div className="flex-1">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-white font-medium">{problem.title}</span>
-                                            <span className={`px-2 py-1 rounded text-xs ${getDifficultyColor(problem.difficulty)}`}>
-                                                {problem.difficulty}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center justify-between mt-1">
-                                            <span className="text-gray-400 text-sm">{problem.category}</span>
-                                            <span className="text-yellow-400 text-sm">{problem.points} pts</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        <p className="text-sm text-gray-400">
-                            Selected: {newContest.selectedProblems.length} problems (Total Points: {newContest.selectedProblems.reduce((sum, id) => {
-                                const problem = problems.find(p => p._id === id);
-                                return sum + (problem?.points || 0);
-                            }, 0)})
-                        </p>
-                    </div>
-
-                    {/* Participant Selection */}
-                    <div className="space-y-4">
-                        <h3 className="text-lg font-semibold text-white">Participant Selection</h3>
-                        
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">Selection Method</label>
-                            <select
-                                value={newContest.participantSelection}
-                                onChange={(e) => setNewContest({...newContest, participantSelection: e.target.value})}
-                                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white"
-                            >
-                                <option value="manual">Manual Selection</option>
-                                <option value="department">By Department</option>
-                                <option value="semester">By Semester</option>
-                                <option value="division">By Division</option>
-                                <option value="batch">By Batch</option>
-                            </select>
-                        </div>
-
-                        {newContest.participantSelection !== 'manual' && (
-                            <div className="grid md:grid-cols-4 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">Department</label>
-                                    <select
-                                        value={newContest.filterCriteria.department}
-                                        onChange={(e) => setNewContest({
-                                            ...newContest,
-                                            filterCriteria: {...newContest.filterCriteria, department: e.target.value}
-                                        })}
-                                        className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white"
-                                    >
-                                        <option value="">All Departments</option>
-                                        <option value="AIML">AIML</option>
-                                        <option value="CSE">CSE</option>
-                                        <option value="IT">IT</option>
-                                        <option value="ECE">ECE</option>
-                                        <option value="MECH">MECH</option>
-                                        <option value="CIVIL">CIVIL</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">Semester</label>
-                                    <select
-                                        value={newContest.filterCriteria.semester || ''}
-                                        onChange={(e) => setNewContest({
-                                            ...newContest,
-                                            filterCriteria: {...newContest.filterCriteria, semester: e.target.value ? parseInt(e.target.value) : null}
-                                        })}
-                                        className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white"
-                                    >
-                                        <option value="">All Semesters</option>
-                                        {[1,2,3,4,5,6,7,8].map(sem => (
-                                            <option key={sem} value={sem}>Semester {sem}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">Division</label>
-                                    <select
-                                        value={newContest.filterCriteria.division || ''}
-                                        onChange={(e) => setNewContest({
-                                            ...newContest,
-                                            filterCriteria: {...newContest.filterCriteria, division: e.target.value ? parseInt(e.target.value) : null}
-                                        })}
-                                        className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white"
-                                    >
-                                        <option value="">All Divisions</option>
-                                        {[1,2,3,4].map(div => (
-                                            <option key={div} value={div}>Division {div}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">Batch</label>
-                                    <select
-                                        value={newContest.filterCriteria.batch}
-                                        onChange={(e) => setNewContest({
-                                            ...newContest,
-                                            filterCriteria: {...newContest.filterCriteria, batch: e.target.value}
-                                        })}
-                                        className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white"
-                                    >
-                                        <option value="">All Batches</option>
-                                        {['A1', 'B1', 'C1', 'D1', 'A2', 'B2', 'C2', 'D2', 'A3', 'B3', 'C3', 'D3', 'A4', 'B4', 'C4', 'D4'].map(batch => (
-                                            <option key={batch} value={batch}>{batch}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="bg-gray-800 rounded-lg p-4 max-h-60 overflow-y-auto">
-                            <div className="flex justify-between items-center mb-3">
-                                <h4 className="text-white font-medium">
-                                    Available Students ({getFilteredStudents().length})
-                                </h4>
-                                <button
-                                    type="button"
-                                    onClick={selectAllFilteredStudents}
-                                    className="text-blue-400 hover:text-blue-300 text-sm"
-                                >
-                                    Select All Filtered
-                                </button>
-                            </div>
-                            <div className="space-y-2">
-                                {getFilteredStudents().map(student => (
-                                    <div key={student._id} className="flex items-center space-x-3">
-                                        <input
-                                            type="checkbox"
-                                            checked={newContest.selectedParticipants.includes(student._id)}
-                                            onChange={() => handleParticipantSelection(student._id)}
-                                            className="w-4 h-4 text-purple-600"
-                                        />
-                                        <div className="flex-1">
-                                            <span className="text-white">{student.name}</span>
-                                            <span className="text-gray-400 text-sm ml-2">
-                                                {student.department} - Sem {student.semester} - Div {student.division} - {student.batch}
-                                            </span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        <p className="text-sm text-gray-400">
-                            Selected: {newContest.selectedParticipants.length} participants
-                        </p>
-                    </div>
-
-                    {/* Submit Buttons */}
-                    <div className="flex justify-end space-x-4 pt-6 border-t border-gray-700">
-                        <button 
-                            type="button"
-                            onClick={onClose}
-                            className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-                        >
-                            Cancel
-                        </button>
-                        <button 
-                            type="submit" 
-                            className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-lg hover:shadow-lg"
-                            disabled={newContest.selectedProblems.length === 0 || newContest.selectedParticipants.length === 0}
-                        >
-                            Create Contest
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-};
-
-// Updated Participants Modal Component
-const ParticipantsModal = ({ contest, onClose }) => {
-    return (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-6xl w-full max-h-[80vh] overflow-y-auto">
-                <div className="p-6 border-b border-gray-700">
-                    <div className="flex justify-between items-center">
-                        <h2 className="text-2xl font-bold text-white">Contest Participants</h2>
-                        <button 
-                            onClick={onClose}
-                            className="text-gray-400 hover:text-white"
-                        >
-                            ✕
-                        </button>
-                    </div>
-                    <p className="text-gray-400 mt-2">{contest.title}</p>
-                </div>
-
-                <div className="p-6">
-                    <div className="mb-4 flex justify-between items-center">
-                        <p className="text-white">
-                            Total Participants: <span className="font-bold text-blue-400">{contest.participants.length}</span>
-                        </p>
-                        <div className="text-sm text-gray-400">
-                            Registration Rate: {((contest.participants.length / contest.maxParticipants) * 100).toFixed(1)}%
-                        </div>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead className="bg-gray-800">
-                                <tr>
-                                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Name</th>
-                                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Department</th>
-                                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Academic Info</th>
-                                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Score</th>
-                                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Submissions</th>
-                                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Problems Attempted</th>
-                                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Registration Time</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-700">
-                                {contest.participants.map((participant) => (
-                                    <tr key={participant.userId} className="hover:bg-gray-800/50">
-                                        <td className="px-4 py-3">
-                                            <div>
-                                                <div className="text-white font-medium">{participant.name}</div>
-                                                <div className="text-gray-400 text-sm">{participant.email}</div>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3 text-gray-300">{participant.department}</td>
-                                        <td className="px-4 py-3">
-                                            <div className="text-gray-300 text-sm">
-                                                Sem {participant.semester} • Div {participant.division} • {participant.batch}
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <span className="text-green-400 font-bold">{participant.score || 0}</span>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <span className="text-blue-400">{participant.submissions || 0}</span>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <span className="text-purple-400">{participant.problemsAttempted?.length || 0}</span>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <span className="text-gray-400 text-sm">
-                                                {new Date(participant.registrationTime).toLocaleString()}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// Updated Leaderboard Modal Component
-const LeaderboardModal = ({ contest, onClose }) => {
-    const sortedParticipants = [...contest.participants].sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        if (a.submissions !== b.submissions) return a.submissions - b.submissions;
-        return new Date(a.lastActivityTime) - new Date(b.lastActivityTime);
-    });
-
-    return (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-6xl w-full max-h-[80vh] overflow-y-auto">
-                <div className="p-6 border-b border-gray-700">
-                    <div className="flex justify-between items-center">
-                        <h2 className="text-2xl font-bold text-white">Contest Leaderboard</h2>
-                        <button 
-                            onClick={onClose}
-                            className="text-gray-400 hover:text-white"
-                        >
-                            ✕
-                        </button>
-                    </div>
-                    <div className="flex justify-between items-center mt-2">
-                        <p className="text-gray-400">{contest.title}</p>
-                        <div className="text-sm text-gray-400">
-                            Status: <span className={`font-medium ${contest.status === 'Active' ? 'text-green-400' : 'text-gray-300'}`}>
-                                {contest.status}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="p-6">
-                    <div className="mb-4 grid grid-cols-3 gap-4 text-center">
-                        <div className="bg-gray-800/50 rounded-lg p-4">
-                            <div className="text-2xl font-bold text-blue-400">{contest.participants.length}</div>
-                            <div className="text-gray-400 text-sm">Total Participants</div>
-                        </div>
-                        <div className="bg-gray-800/50 rounded-lg p-4">
-                            <div className="text-2xl font-bold text-green-400">{contest.analytics.totalSubmissions}</div>
-                            <div className="text-gray-400 text-sm">Total Submissions</div>
-                        </div>
-                        <div className="bg-gray-800/50 rounded-lg p-4">
-                            <div className="text-2xl font-bold text-purple-400">{contest.analytics.averageScore.toFixed(1)}</div>
-                            <div className="text-gray-400 text-sm">Average Score</div>
-                        </div>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead className="bg-gray-800">
-                                <tr>
-                                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Rank</th>
-                                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Participant</th>
-                                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Score</th>
-                                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Submissions</th>
-                                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Problems Solved</th>
-                                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Department</th>
-                                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">Last Activity</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-700">
-                                {sortedParticipants.map((participant, index) => (
-                                    <tr key={participant.userId} className="hover:bg-gray-800/50">
-                                        <td className="px-4 py-3">
-                                            <div className="flex items-center">
-                                                {index === 0 && <span className="text-yellow-400 mr-2">🥇</span>}
-                                                {index === 1 && <span className="text-gray-300 mr-2">🥈</span>}
-                                                {index === 2 && <span className="text-orange-400 mr-2">🥉</span>}
-                                                <span className="text-white font-bold">#{index + 1}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <div>
-                                                <div className="text-white font-medium">{participant.name}</div>
-                                                <div className="text-gray-400 text-sm">
-                                                    Sem {participant.semester} • Div {participant.division} • {participant.batch}
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <span className="text-green-400 font-bold text-lg">{participant.score || 0}</span>
-                                            <span className="text-gray-400 text-sm ml-1">/ {contest.totalPoints}</span>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <span className="text-blue-400">{participant.submissions || 0}</span>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <span className="text-purple-400">
-                                                {participant.problemsAttempted?.filter(p => p.solved).length || 0} / {contest.problems.length}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <span className="text-gray-300">{participant.department}</span>
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <span className="text-gray-400 text-sm">
-                                                {participant.lastActivityTime ? new Date(participant.lastActivityTime).toLocaleString() : 'Never'}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
         </div>
     );
 };
