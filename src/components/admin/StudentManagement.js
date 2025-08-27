@@ -1,9 +1,10 @@
+// src/components/admin/StudentManagement.js
 import React, { useState, useEffect, useCallback } from 'react';
-import { HiUserAdd, HiUpload, HiUsers, HiEye, HiTrash, HiPencil, HiSearch, HiRefresh } from 'react-icons/hi';
+import { HiUserAdd, HiUpload, HiUsers, HiEye, HiTrash, HiPencil, HiSearch, HiRefresh, HiArrowLeft } from 'react-icons/hi';
 import * as XLSX from 'xlsx';
 import { userAPI } from '../../services/api';
 
-const StudentManagement = () => {
+const StudentManagement = ({ onBack }) => {
     const [students, setStudents] = useState([]);
     const [filteredStudents, setFilteredStudents] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -286,6 +287,20 @@ const StudentManagement = () => {
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 p-8">
             <div className="max-w-7xl mx-auto">
+                {/* Back Button */}
+                {onBack && (
+                    <div className="mb-6">
+                        <button
+                            onClick={onBack}
+                            className="flex items-center space-x-2 text-white/80 hover:text-white transition-colors p-3 hover:bg-white/10 rounded-lg"
+                            title="Back to Admin Dashboard"
+                        >
+                            <HiArrowLeft className="text-xl" />
+                            <span className="font-medium">Back to Dashboard</span>
+                        </button>
+                    </div>
+                )}
+
                 {/* Header */}
                 <div className="text-center mb-12">
                     <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-2xl mb-4">

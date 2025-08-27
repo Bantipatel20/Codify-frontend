@@ -1,10 +1,13 @@
 // src/components/admin/ViewProblems.js
 import React, { useState, useEffect, useCallback } from 'react';
-import { HiCode, HiTrash, HiPencil, HiEye, HiPlus, HiSearch } from 'react-icons/hi';
+import { HiCode, HiTrash, HiPencil, HiEye, HiArrowLeft, HiSearch } from 'react-icons/hi';
 import { problemsAPI } from '../../services/api';
 
-const ViewProblems = ({ onDataUpdate, onEdit }) => {
+const ViewProblems = ({ onEdit, onDataUpdate }) => {
     const [problems, setProblems] = useState([]);
+    const [selectedProblem, setSelectedProblem] = useState(null);
+    const [viewMode, setViewMode] = useState('list'); // 'list' or 'detail' or 'edit'
+    const [editingProblem, setEditingProblem] = useState(null);
     const [statistics, setStatistics] = useState({
         totalProblems: 0,
         totalSubmissions: 0,
@@ -37,6 +40,25 @@ const ViewProblems = ({ onDataUpdate, onEdit }) => {
         }
     }, [filters]);
 
+    const fetchProblemDetails = async (problemId) => {
+        try {
+            setLoading(true);
+            const response = await problemsAPI.getProblemById(problemId);
+            
+            if (response.success) {
+                setSelectedProblem(response.data);
+                setViewMode('detail');
+            } else {
+                alert('Failed to load problem details');
+            }
+        } catch (error) {
+            console.error('Error fetching problem details:', error);
+            alert('Error loading problem details');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const fetchStatistics = useCallback(async () => {
         try {
             const response = await problemsAPI.getStatistics();
@@ -55,9 +77,11 @@ const ViewProblems = ({ onDataUpdate, onEdit }) => {
     }, []);
 
     useEffect(() => {
-        fetchProblems();
-        fetchStatistics();
-    }, [fetchProblems, fetchStatistics]);
+        if (viewMode === 'list') {
+            fetchProblems();
+            fetchStatistics();
+        }
+    }, [fetchProblems, fetchStatistics, viewMode]);
 
     const handleDelete = async (id) => {
         if (window.confirm('Are you sure you want to delete this problem?')) {
@@ -69,6 +93,11 @@ const ViewProblems = ({ onDataUpdate, onEdit }) => {
                     await fetchStatistics();
                     if (onDataUpdate) onDataUpdate();
                     alert('Problem deleted successfully!');
+                    
+                    // If we're in detail view and deleted the current problem, go back to list
+                    if (viewMode === 'detail' && selectedProblem && selectedProblem._id === id) {
+                        handleBackToList();
+                    }
                 } else {
                     alert('Failed to delete problem');
                 }
@@ -79,9 +108,78 @@ const ViewProblems = ({ onDataUpdate, onEdit }) => {
         }
     };
 
-    const handleEdit = (problem) => {
-        if (onEdit) {
-            onEdit(problem);
+    const handleEdit = async (problem) => {
+        console.log('Edit button clicked for problem:', problem);
+        
+        // If we only have basic problem data, fetch full details including test cases
+        if (!problem.testCases) {
+            try {
+                setLoading(true);
+                const response = await problemsAPI.getProblemById(problem._id);
+                
+                if (response.success) {
+                    setEditingProblem(response.data);
+                    setViewMode('edit');
+                } else {
+                    alert('Failed to load problem details for editing');
+                }
+            } catch (error) {
+                console.error('Error fetching problem for editing:', error);
+                alert('Error loading problem for editing');
+            } finally {
+                setLoading(false);
+            }
+        } else {
+            setEditingProblem(problem);
+            setViewMode('edit');
+        }
+    };
+
+    const handleView = (problemId) => {
+        console.log('View button clicked for problem ID:', problemId);
+        fetchProblemDetails(problemId);
+    };
+
+    const handleBackToList = () => {
+        setViewMode('list');
+        setSelectedProblem(null);
+        setEditingProblem(null);
+    };
+
+    const handleSaveEdit = async (updatedProblem) => {
+        try {
+            setLoading(true);
+            
+            // Prepare the update data with all required fields
+            const updateData = {
+                title: updatedProblem.title,
+                description: updatedProblem.description,
+                difficulty: updatedProblem.difficulty,
+                tags: updatedProblem.tags,
+                testCases: updatedProblem.testCases,
+                // Keep existing fields
+                createdBy: updatedProblem.createdBy,
+                isActive: updatedProblem.isActive
+            };
+
+            console.log('Updating problem with data:', updateData);
+            
+            const response = await problemsAPI.updateProblem(updatedProblem._id, updateData);
+            
+            if (response.success) {
+                alert('Problem updated successfully!');
+                await fetchProblems();
+                await fetchStatistics();
+                if (onDataUpdate) onDataUpdate();
+                handleBackToList();
+            } else {
+                alert('Failed to update problem: ' + (response.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Error updating problem:', error);
+            alert('Error updating problem: ' + error.message);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -115,6 +213,421 @@ const ViewProblems = ({ onDataUpdate, onEdit }) => {
         return 'text-red-400';
     };
 
+    // Edit Problem Form Component - Simplified without add/remove test cases
+    const EditProblemForm = ({ problem, onSave, onCancel }) => {
+        const [formData, setFormData] = useState({
+            title: problem?.title || '',
+            description: problem?.description || '',
+            difficulty: problem?.difficulty || 'Easy',
+            tags: problem?.tags ? problem.tags.join(', ') : '',
+            testCases: problem?.testCases || []
+        });
+
+        const handleInputChange = (field, value) => {
+            setFormData(prev => ({
+                ...prev,
+                [field]: value
+            }));
+        };
+
+        const handleTestCaseChange = (index, field, value) => {
+            const updatedTestCases = [...formData.testCases];
+            updatedTestCases[index] = {
+                ...updatedTestCases[index],
+                [field]: value
+            };
+            setFormData(prev => ({
+                ...prev,
+                testCases: updatedTestCases
+            }));
+        };
+
+        const handleSubmit = (e) => {
+            e.preventDefault();
+            
+            // Validation
+            if (!formData.title.trim()) {
+                alert('Title is required');
+                return;
+            }
+            
+            if (!formData.description.trim()) {
+                alert('Description is required');
+                return;
+            }
+
+            // Check if all test cases have input and output
+            const invalidTestCase = formData.testCases.find(tc => !tc.input.trim() || !tc.output.trim());
+            if (invalidTestCase) {
+                alert('All test cases must have both input and output');
+                return;
+            }
+
+            const updatedProblem = {
+                ...problem,
+                title: formData.title.trim(),
+                description: formData.description.trim(),
+                difficulty: formData.difficulty,
+                tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag),
+                testCases: formData.testCases
+            };
+
+            console.log('Submitting updated problem:', updatedProblem);
+            onSave(updatedProblem);
+        };
+
+        return (
+            <div className="p-8">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center space-x-4">
+                        <button 
+                            onClick={onCancel}
+                            className="w-10 h-10 bg-gray-700 hover:bg-gray-600 rounded-lg flex items-center justify-center transition-colors"
+                            title="Cancel editing"
+                        >
+                            <HiArrowLeft className="text-xl text-white" />
+                        </button>
+                        <div className="w-12 h-12 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
+                            <HiPencil className="text-2xl text-white" />
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-bold text-white">Edit Problem</h2>
+                            <p className="text-gray-400">Modify problem details and test cases</p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Edit Form */}
+                <form onSubmit={handleSubmit} className="space-y-8">
+                    {/* Basic Information */}
+                    <div className="bg-gray-800/30 border border-gray-600 rounded-xl p-6">
+                        <h3 className="text-xl font-bold text-white mb-6">Basic Information</h3>
+                        
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    Title *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formData.title}
+                                    onChange={(e) => handleInputChange('title', e.target.value)}
+                                    className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                                    placeholder="Enter problem title"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    Difficulty *
+                                </label>
+                                <select
+                                    value={formData.difficulty}
+                                    onChange={(e) => handleInputChange('difficulty', e.target.value)}
+                                    className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                                >
+                                    <option value="Easy">Easy</option>
+                                    <option value="Medium">Medium</option>
+                                    <option value="Hard">Hard</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    Tags (comma-separated)
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formData.tags}
+                                    onChange={(e) => handleInputChange('tags', e.target.value)}
+                                    className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                                    placeholder="e.g., arrays, sorting, dynamic programming"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    Description *
+                                </label>
+                                <textarea
+                                    value={formData.description}
+                                    onChange={(e) => handleInputChange('description', e.target.value)}
+                                    rows={6}
+                                    className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 resize-vertical"
+                                    placeholder="Enter problem description"
+                                    required
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Test Cases - Edit Only, No Add/Remove */}
+                    <div className="bg-gray-800/30 border border-gray-600 rounded-xl p-6">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-xl font-bold text-white">
+                                Test Cases ({formData.testCases.length})
+                            </h3>
+                            <div className="text-sm text-gray-400">
+                                Edit existing test cases only
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            {formData.testCases.map((testCase, index) => (
+                                <div key={index} className="bg-gray-700/30 border border-gray-600 rounded-lg p-4">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h4 className="text-lg font-semibold text-white">Test Case {index + 1}</h4>
+                                        <div className="text-xs text-gray-400">
+                                            Required fields
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-400 mb-2">
+                                                Input *
+                                            </label>
+                                            <textarea
+                                                value={testCase.input}
+                                                onChange={(e) => handleTestCaseChange(index, 'input', e.target.value)}
+                                                rows={4}
+                                                className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-green-400 font-mono text-sm placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-vertical"
+                                                placeholder="Enter input for this test case"
+                                                required
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-400 mb-2">
+                                                Expected Output *
+                                            </label>
+                                            <textarea
+                                                value={testCase.output}
+                                                onChange={(e) => handleTestCaseChange(index, 'output', e.target.value)}
+                                                rows={4}
+                                                className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-blue-400 font-mono text-sm placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-vertical"
+                                                placeholder="Enter expected output for this test case"
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {formData.testCases.length === 0 && (
+                            <div className="text-center py-8">
+                                <div className="text-gray-400 mb-2">No test cases found</div>
+                                <div className="text-sm text-gray-500">
+                                    This problem needs to have test cases added through the create problem form
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center justify-end space-x-4">
+                        <button
+                            type="button"
+                            onClick={onCancel}
+                            className="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                        >
+                            Cancel Changes
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                        >
+                            {loading ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    <span>Saving...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <HiPencil className="text-sm" />
+                                    <span>Save Changes</span>
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        );
+    };
+
+    // Problem Detail View Component
+    const ProblemDetailView = ({ problem }) => (
+        <div className="p-8">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center space-x-4">
+                    <button 
+                        onClick={handleBackToList}
+                        className="w-10 h-10 bg-gray-700 hover:bg-gray-600 rounded-lg flex items-center justify-center transition-colors"
+                        title="Back to Problems List"
+                    >
+                        <HiArrowLeft className="text-xl text-white" />
+                    </button>
+                    <div className="w-12 h-12 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
+                        <HiCode className="text-2xl text-white" />
+                    </div>
+                    <div>
+                        <h2 className="text-2xl font-bold text-white">{problem.title}</h2>
+                        <p className="text-gray-400">Problem Details</p>
+                    </div>
+                </div>
+                <div className="flex items-center space-x-3">
+                    <button 
+                        onClick={() => handleEdit(problem)}
+                        className="flex items-center space-x-2 bg-gradient-to-r from-yellow-500 to-orange-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all duration-300 transform hover:scale-105"
+                        title="Edit this problem"
+                    >
+                        <HiPencil className="text-lg" />
+                        <span className="font-medium">Edit Problem</span>
+                    </button>
+                    <button 
+                        onClick={() => handleDelete(problem._id)}
+                        className="flex items-center space-x-2 bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all duration-300 transform hover:scale-105"
+                        title="Delete this problem"
+                    >
+                        <HiTrash className="text-lg" />
+                        <span className="font-medium">Delete</span>
+                    </button>
+                </div>
+            </div>
+
+            {/* Problem Info Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div className="bg-gray-800/30 border border-gray-600 rounded-xl p-6">
+                    <h3 className="text-lg font-semibold text-white mb-2">Difficulty</h3>
+                    <span className={`inline-block px-4 py-2 rounded-full text-sm font-medium border ${getDifficultyColor(problem.difficulty)}`}>
+                        {problem.difficulty}
+                    </span>
+                </div>
+                <div className="bg-gray-800/30 border border-gray-600 rounded-xl p-6">
+                    <h3 className="text-lg font-semibold text-white mb-2">Submissions</h3>
+                    <p className="text-3xl font-bold text-blue-400">{problem.totalSubmissions || 0}</p>
+                </div>
+                <div className="bg-gray-800/30 border border-gray-600 rounded-xl p-6">
+                    <h3 className="text-lg font-semibold text-white mb-2">Success Rate</h3>
+                    <p className={`text-3xl font-bold ${getSuccessRateColor(parseFloat(problem.successRate || 0))}`}>
+                        {problem.successRate || 0}%
+                    </p>
+                </div>
+            </div>
+
+            {/* Problem Content */}
+            <div className="space-y-8">
+                {/* Description */}
+                <div className="bg-gray-800/30 border border-gray-600 rounded-xl p-6">
+                    <h3 className="text-xl font-bold text-white mb-4">Description</h3>
+                    <div className="text-gray-300 whitespace-pre-wrap leading-relaxed">
+                        {problem.description}
+                    </div>
+                </div>
+
+                {/* Tags */}
+                {problem.tags && problem.tags.length > 0 && (
+                    <div className="bg-gray-800/30 border border-gray-600 rounded-xl p-6">
+                        <h3 className="text-xl font-bold text-white mb-4">Tags</h3>
+                        <div className="flex flex-wrap gap-3">
+                            {problem.tags.map((tag, index) => (
+                                <span 
+                                    key={index} 
+                                    className="px-4 py-2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg text-sm font-medium"
+                                >
+                                    {tag}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Test Cases */}
+                <div className="bg-gray-800/30 border border-gray-600 rounded-xl p-6">
+                    <h3 className="text-xl font-bold text-white mb-4">Test Cases ({problem.testCases?.length || 0})</h3>
+                    <div className="space-y-4">
+                        {problem.testCases?.map((testCase, index) => (
+                            <div key={index} className="bg-gray-700/30 border border-gray-600 rounded-lg p-4">
+                                <h4 className="text-lg font-semibold text-white mb-3">Test Case {index + 1}</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <h5 className="text-sm font-medium text-gray-400 mb-2">Input:</h5>
+                                        <div className="bg-gray-900 border border-gray-600 rounded-lg p-3">
+                                            <pre className="text-green-400 text-sm font-mono whitespace-pre-wrap">
+                                                {testCase.input}
+                                            </pre>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h5 className="text-sm font-medium text-gray-400 mb-2">Expected Output:</h5>
+                                        <div className="bg-gray-900 border border-gray-600 rounded-lg p-3">
+                                            <pre className="text-blue-400 text-sm font-mono whitespace-pre-wrap">
+                                                {testCase.output}
+                                            </pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Problem Metadata */}
+                <div className="bg-gray-800/30 border border-gray-600 rounded-xl p-6">
+                    <h3 className="text-xl font-bold text-white mb-4">Problem Information</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h4 className="text-sm font-medium text-gray-400 mb-2">Created By</h4>
+                            <p className="text-white">{problem.createdBy?.name || 'Unknown'}</p>
+                            <p className="text-gray-400 text-sm">{problem.createdBy?.email || ''}</p>
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-medium text-gray-400 mb-2">Created Date</h4>
+                            <p className="text-white">{new Date(problem.createdAt).toLocaleDateString()}</p>
+                            <p className="text-gray-400 text-sm">{new Date(problem.createdAt).toLocaleTimeString()}</p>
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-medium text-gray-400 mb-2">Last Updated</h4>
+                            <p className="text-white">{new Date(problem.updatedAt).toLocaleDateString()}</p>
+                            <p className="text-gray-400 text-sm">{new Date(problem.updatedAt).toLocaleTimeString()}</p>
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-medium text-gray-400 mb-2">Status</h4>
+                            <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                                problem.isActive 
+                                    ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                                    : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                            }`}>
+                                {problem.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
+    // Show edit form if editing
+    if (viewMode === 'edit' && editingProblem) {
+        return (
+            <EditProblemForm 
+                problem={editingProblem} 
+                onSave={handleSaveEdit}
+                onCancel={handleBackToList}
+            />
+        );
+    }
+
+    // Show problem detail view if selected
+    if (viewMode === 'detail' && selectedProblem) {
+        return <ProblemDetailView problem={selectedProblem} />;
+    }
+
+    // Loading state
     if (loading && problems.length === 0) {
         return (
             <div className="p-8 text-center">
@@ -126,7 +639,7 @@ const ViewProblems = ({ onDataUpdate, onEdit }) => {
 
     return (
         <div className="p-8">
-            {/* Header */}
+            {/* Header - Removed Add Problem Button */}
             <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center space-x-4">
                     <div className="w-12 h-12 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
@@ -137,12 +650,6 @@ const ViewProblems = ({ onDataUpdate, onEdit }) => {
                         <p className="text-gray-400">Manage your coding challenges</p>
                     </div>
                 </div>
-                {!onEdit && (
-                    <button className="flex items-center space-x-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all duration-300 transform hover:scale-105">
-                        <HiPlus className="text-lg" />
-                        <span className="font-medium">Add Problem</span>
-                    </button>
-                )}
             </div>
 
             {/* Filters */}
@@ -275,13 +782,18 @@ const ViewProblems = ({ onDataUpdate, onEdit }) => {
 
                                 {/* Action Buttons */}
                                 <div className="flex items-center space-x-2">
-                                    <button className="flex items-center space-x-1 bg-blue-500/20 text-blue-400 px-4 py-2 rounded-lg hover:bg-blue-500/30 transition-all duration-300">
+                                    <button 
+                                        onClick={() => handleView(problem._id)}
+                                        className="flex items-center space-x-1 bg-blue-500/20 text-blue-400 px-4 py-2 rounded-lg hover:bg-blue-500/30 transition-all duration-300"
+                                        title="View problem details"
+                                    >
                                         <HiEye className="text-sm" />
                                         <span className="text-sm font-medium">View</span>
                                     </button>
                                     <button 
                                         onClick={() => handleEdit(problem)}
                                         className="flex items-center space-x-1 bg-yellow-500/20 text-yellow-400 px-4 py-2 rounded-lg hover:bg-yellow-500/30 transition-all duration-300"
+                                        title="Edit this problem"
                                     >
                                         <HiPencil className="text-sm" />
                                         <span className="text-sm font-medium">Edit</span>
@@ -289,6 +801,7 @@ const ViewProblems = ({ onDataUpdate, onEdit }) => {
                                     <button 
                                         onClick={() => handleDelete(problem._id)}
                                         className="flex items-center space-x-1 bg-red-500/20 text-red-400 px-4 py-2 rounded-lg hover:bg-red-500/30 transition-all duration-300"
+                                        title="Delete this problem"
                                     >
                                         <HiTrash className="text-sm" />
                                         <span className="text-sm font-medium">Delete</span>
@@ -337,12 +850,9 @@ const ViewProblems = ({ onDataUpdate, onEdit }) => {
                     <p className="text-gray-400 mb-6">
                         {filters.search || filters.difficulty || filters.tags 
                             ? 'No problems match your current filters' 
-                            : 'Start by creating your first coding problem'
+                            : 'No problems available in the system'
                         }
                     </p>
-                    <button className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all duration-300">
-                        Create Problem
-                    </button>
                 </div>
             )}
         </div>

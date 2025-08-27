@@ -4,7 +4,7 @@ import { HiPlus, HiCode, HiArrowLeft, HiSave, HiTrash } from 'react-icons/hi';
 import { problemsAPI, authAPI } from '../../services/api';
 import ViewProblems from './ViewProblems';
 
-const ProblemManagement = () => {
+const ProblemManagement = ({ onBack }) => {
     const [activeTab, setActiveTab] = useState('list'); // 'list', 'create', 'edit'
     const [editingProblem, setEditingProblem] = useState(null);
     const [formData, setFormData] = useState({
@@ -398,6 +398,18 @@ const ProblemManagement = () => {
                 {/* Header */}
                 <div className="flex items-center justify-between mb-8">
                     <div className="flex items-center space-x-4">
+                        {/* Back to Dashboard Button */}
+                        {onBack && (
+                            <button
+                                onClick={onBack}
+                                className="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors p-2 hover:bg-gray-800 rounded-lg"
+                                title="Back to Admin Dashboard"
+                            >
+                                <HiArrowLeft className="text-xl" />
+                                <span className="font-medium">Dashboard</span>
+                            </button>
+                        )}
+                        
                         <div className="w-12 h-12 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
                             <HiCode className="text-2xl text-white" />
                         </div>
@@ -417,15 +429,6 @@ const ProblemManagement = () => {
                         </button>
                     )}
                 </div>
-
-                {/* Debug Info - Remove in production */}
-                {process.env.NODE_ENV === 'development' && currentUser && (
-                    <div className="mb-4 p-3 bg-gray-800 border border-gray-700 rounded-lg">
-                        <p className="text-sm text-gray-400">
-                            <strong>Debug:</strong> Current User: {currentUser.name} (ID: {currentUser._id})
-                        </p>
-                    </div>
-                )}
 
                 {/* Content */}
                 {activeTab === 'list' ? (

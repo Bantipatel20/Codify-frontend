@@ -1,12 +1,17 @@
 // src/components/admin/AdminDashboard.js
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { HiOutlineClipboardList, HiUserGroup, HiChartBar, HiCog, HiLogout, HiSparkles, HiStar } from 'react-icons/hi';
 import { problemsAPI, userAPI } from '../../services/api';
 import ViewProblems from './ViewProblems';
-
+import ProblemManagement from './ProblemManagement';
+import StudentManagement from './StudentManagement';
+import Settings from './Settings';
+import Contest from './Contest';
+import SubmissionTracking from './SubmissionTracking'; 
 const AdminDashboard = () => {
     const navigate = useNavigate();
+    const [activeView, setActiveView] = useState('dashboard'); // Track current view
     const [statistics, setStatistics] = useState({
         totalProblems: 0,
         totalStudents: 0,
@@ -25,10 +30,7 @@ const AdminDashboard = () => {
         try {
             setLoading(true);
             
-            // Fetch problems statistics
             const problemStats = await problemsAPI.getStatistics();
-            
-            // Fetch users data for student count
             const usersData = await userAPI.getAllUsers({ limit: 1 });
             
             setStatistics({
@@ -36,8 +38,8 @@ const AdminDashboard = () => {
                 totalStudents: usersData.totalUsers || 0,
                 totalSubmissions: problemStats.data?.submissions?.total || 0,
                 successRate: parseFloat(problemStats.data?.submissions?.successRate || 0),
-                todaySubmissions: Math.floor(Math.random() * 100), // Mock data - replace with actual API
-                activeStudents: Math.floor((usersData.totalUsers || 0) * 0.7) // Mock calculation
+                todaySubmissions: Math.floor(Math.random() * 100), 
+                activeStudents: Math.floor((usersData.totalUsers || 0) * 0.7) 
             });
         } catch (error) {
             console.error('Error fetching dashboard data:', error);
@@ -52,12 +54,20 @@ const AdminDashboard = () => {
         navigate('/login');
     };
 
+    const handleBackToDashboard = () => {
+        setActiveView('dashboard');
+    };
+
+    const handleNavigation = (view) => {
+        setActiveView(view);
+    };
+
     const dashboardCards = [
         {
             title: 'Problem Management',
             description: 'Create, edit, and organize coding challenges',
             icon: HiOutlineClipboardList,
-            link: '/admin/problems',
+            action: () => handleNavigation('problems'),
             color: 'from-violet-500 to-purple-600',
             stats: `${statistics.totalProblems} Problems`
         },
@@ -65,7 +75,7 @@ const AdminDashboard = () => {
             title: 'Student Hub',
             description: 'Manage student accounts and track progress',
             icon: HiUserGroup,
-            link: '/admin/students',
+            action: () => handleNavigation('students'),
             color: 'from-emerald-500 to-teal-600',
             stats: `${statistics.totalStudents} Students`
         },
@@ -73,7 +83,7 @@ const AdminDashboard = () => {
             title: 'Submission Analytics',
             description: 'Monitor and analyze code submissions',
             icon: HiChartBar,
-            link: '/admin/submissions',
+            action: () => handleNavigation('submissions'),
             color: 'from-orange-500 to-red-600',
             stats: `${statistics.totalSubmissions} Submissions`
         },
@@ -81,7 +91,7 @@ const AdminDashboard = () => {
             title: 'System Settings',
             description: 'Configure platform preferences',
             icon: HiCog,
-            link: '/admin/settings',
+            action: () => handleNavigation('settings'),
             color: 'from-slate-500 to-gray-600',
             stats: 'Latest Config'
         },
@@ -89,11 +99,33 @@ const AdminDashboard = () => {
             title: 'Contest Management',
             description: 'Create and manage programming contests',
             icon: HiStar,
-            link: '/admin/contests',
+            action: () => handleNavigation('contests'),
             color: 'from-yellow-500 to-orange-600',
             stats: '3 Active'
         }
     ];
+
+    // Render different views based on activeView state
+    if (activeView === 'problems') {
+        return <ProblemManagement onBack={handleBackToDashboard} />;
+    }
+
+    if (activeView === 'students') {
+        return <StudentManagement onBack={handleBackToDashboard} />;
+    }
+
+    if (activeView === 'settings') {
+        return <Settings onBack={handleBackToDashboard} />;
+    }
+
+    if (activeView === 'submissions') {
+        return <SubmissionTracking onBack={handleBackToDashboard} />;
+    }
+
+    if (activeView === 'contests') {
+        return <Contest onBack={handleBackToDashboard} />;
+
+    }
 
     if (loading) {
         return (
@@ -106,6 +138,7 @@ const AdminDashboard = () => {
         );
     }
 
+    // Main Dashboard View
     return (
         <div className="min-h-screen bg-gray-900 text-white">
             {/* Header */}
@@ -117,7 +150,7 @@ const AdminDashboard = () => {
                         </div>
                         <div>
                             <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                                HackForge Admin
+                                Codify Admin
                             </h1>
                             <p className="text-gray-300 text-sm">Platform Control Center</p>
                         </div>
@@ -144,13 +177,12 @@ const AdminDashboard = () => {
                 </div>
 
                 {/* Dashboard Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8 mb-12">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 mb-12">
                     {dashboardCards.map((card, index) => {
                         const IconComponent = card.icon;
                         return (
                             <div key={index} className="group relative">
-                                <div className={`absolute inset-0 bg-gradient-to-r ${card.color} opacity-0 group-hover:opacity-20 transition-opacity duration-300 rounded-2xl blur-xl`}>
-                                </div>
+                                <div className={`absolute inset-0 bg-gradient-to-r ${card.color} opacity-0 group-hover:opacity-20 transition-opacity duration-300 rounded-2xl blur-xl`}></div>
                                 <div className="relative bg-gray-800 border border-gray-700 rounded-2xl p-6 hover:border-gray-600 transition-all duration-300 transform group-hover:-translate-y-2">
                                     <div className={`w-16 h-16 bg-gradient-to-r ${card.color} rounded-xl flex items-center justify-center mb-4`}>
                                         <IconComponent className="text-2xl text-white" />
@@ -161,12 +193,12 @@ const AdminDashboard = () => {
                                         <span className="text-xs text-gray-500 bg-gray-700 px-3 py-1 rounded-full">
                                             {card.stats}
                                         </span>
-                                        <Link 
-                                            to={card.link} 
+                                        <button 
+                                            onClick={card.action}
                                             className={`bg-gradient-to-r ${card.color} text-white px-4 py-2 rounded-lg text-sm font-medium hover:shadow-lg transition-all duration-300 transform hover:scale-105`}
                                         >
                                             Access
-                                        </Link>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -174,41 +206,30 @@ const AdminDashboard = () => {
                     })}
                 </div>
 
-                {/* Quick Stats */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div className="bg-gray-800 border border-gray-700 rounded-2xl p-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-gray-400 text-sm mb-1">Active Students</p>
-                                <p className="text-2xl font-bold text-green-400">{statistics.activeStudents}</p>
-                            </div>
-                            <div className="w-12 h-12 bg-green-500 bg-opacity-20 rounded-xl flex items-center justify-center">
-                                <HiUserGroup className="text-green-400 text-xl" />
-                            </div>
+                {/* Quick Stats Overview */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
+                    <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
+                        <div className="text-center">
+                            <div className="text-3xl font-bold text-blue-400 mb-2">{statistics.totalProblems}</div>
+                            <div className="text-gray-400 text-sm">Total Problems</div>
                         </div>
                     </div>
-                    
-                    <div className="bg-gray-800 border border-gray-700 rounded-2xl p-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-gray-400 text-sm mb-1">Today's Submissions</p>
-                                <p className="text-2xl font-bold text-blue-400">{statistics.todaySubmissions}</p>
-                            </div>
-                            <div className="w-12 h-12 bg-blue-500 bg-opacity-20 rounded-xl flex items-center justify-center">
-                                <HiChartBar className="text-blue-400 text-xl" />
-                            </div>
+                    <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
+                        <div className="text-center">
+                            <div className="text-3xl font-bold text-green-400 mb-2">{statistics.totalStudents}</div>
+                            <div className="text-gray-400 text-sm">Registered Students</div>
                         </div>
                     </div>
-                    
-                    <div className="bg-gray-800 border border-gray-700 rounded-2xl p-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-gray-400 text-sm mb-1">Success Rate</p>
-                                <p className="text-2xl font-bold text-yellow-400">{statistics.successRate}%</p>
-                            </div>
-                            <div className="w-12 h-12 bg-yellow-500 bg-opacity-20 rounded-xl flex items-center justify-center">
-                                <HiSparkles className="text-yellow-400 text-xl" />
-                            </div>
+                    <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
+                        <div className="text-center">
+                            <div className="text-3xl font-bold text-purple-400 mb-2">{statistics.totalSubmissions}</div>
+                            <div className="text-gray-400 text-sm">Total Submissions</div>
+                        </div>
+                    </div>
+                    <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
+                        <div className="text-center">
+                            <div className="text-3xl font-bold text-yellow-400 mb-2">{statistics.successRate}%</div>
+                            <div className="text-gray-400 text-sm">Success Rate</div>
                         </div>
                     </div>
                 </div>

@@ -1,6 +1,6 @@
 // src/components/admin/Contest.js
 import React, { useState, useEffect } from 'react';
-import { HiStar, HiPlus, HiUsers, HiCode, HiCalendar, HiClock, HiPencil, HiTrash, HiPlay, HiStop, HiChartBar, HiDownload, HiFilter } from 'react-icons/hi';
+import { HiStar, HiPlus, HiUsers, HiCode, HiCalendar, HiClock, HiPencil, HiTrash, HiPlay, HiStop, HiChartBar, HiFilter, HiArrowLeft } from 'react-icons/hi';
 import { contestAPI, problemsAPI, userAPI } from '../../services/api';
 
 // Modal Components
@@ -649,29 +649,20 @@ const LeaderboardModal = ({ contest, onClose }) => {
           )}
         </div>
 
-        <div className="p-6 border-t border-gray-700 flex justify-between items-center">
-          <div className="text-sm text-gray-400">
-            Last updated: {new Date().toLocaleString()}
-          </div>
-          <div className="flex space-x-3">
-            <button className="px-4 py-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30">
-              <HiDownload className="w-4 h-4 inline mr-2" />
-              Export CSV
-            </button>
-            <button
-              onClick={onClose}
-              className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-lg hover:shadow-lg"
-            >
-              Close
-            </button>
-          </div>
+        <div className="p-6 border-t border-gray-700 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-lg hover:shadow-lg"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>
   );
 };
 
-const Contest = () => {
+const Contest = ({ onBack }) => {
     // State management
     const [contests, setContests] = useState([]);
     const [problems, setProblems] = useState([]);
@@ -1015,8 +1006,7 @@ const Contest = () => {
     const tabs = [
         { id: 'overview', name: 'Overview', icon: HiStar },
         { id: 'active', name: 'Active Contests', icon: HiPlay },
-        { id: 'completed', name: 'Completed', icon: HiChartBar },
-        { id: 'analytics', name: 'Analytics', icon: HiChartBar }
+        { id: 'completed', name: 'Completed', icon: HiChartBar }
     ];
 
     if (loading) {
@@ -1033,6 +1023,20 @@ const Contest = () => {
     return (
         <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-8">
             <div className="max-w-7xl mx-auto">
+                {/* Back Button */}
+                {onBack && (
+                    <div className="mb-6">
+                        <button
+                            onClick={onBack}
+                            className="flex items-center space-x-2 text-white/80 hover:text-white transition-colors p-3 hover:bg-white/10 rounded-lg"
+                            title="Back to Admin Dashboard"
+                        >
+                            <HiArrowLeft className="text-xl" />
+                            <span className="font-medium">Back to Dashboard</span>
+                        </button>
+                    </div>
+                )}
+
                 {/* Header */}
                 <div className="text-center mb-12">
                     <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-3xl mb-6">
@@ -1074,11 +1078,6 @@ const Contest = () => {
                             >
                                 <HiPlus className="text-lg" />
                                 <span className="font-medium">Create Contest</span>
-                            </button>
-                            
-                            <button className="flex items-center space-x-2 bg-gradient-to-r from-blue-500 to-cyan-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all duration-300 transform hover:scale-105">
-                                <HiDownload className="text-lg" />
-                                <span className="font-medium">Export Data</span>
                             </button>
                         </div>
 
@@ -1431,49 +1430,6 @@ const Contest = () => {
                                     ))}
                                 </div>
                             )}
-                        </div>
-                    </div>
-                )}
-
-                {/* Analytics Tab */}
-                {activeTab === 'analytics' && (
-                    <div className="space-y-6">
-                        <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
-                            <h2 className="text-2xl font-bold text-white mb-6">Contest Analytics</h2>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                                <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30 rounded-xl p-6">
-                                    <h3 className="text-lg font-semibold text-white mb-2">Average Participation</h3>
-                                    <p className="text-3xl font-bold text-blue-400">
-                                        {contests.length > 0 ? 
-                                            Math.round(contests.reduce((sum, c) => sum + (c.participants?.length || 0), 0) / contests.length) : 0
-                                        }
-                                    </p>
-                                    <p className="text-gray-400 text-sm">participants per contest</p>
-                                </div>
-
-                                <div className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-500/30 rounded-xl p-6">
-                                    <h3 className="text-lg font-semibold text-white mb-2">Success Rate</h3>
-                                    <p className="text-3xl font-bold text-green-400">
-                                        {contests.filter(c => c.status === 'Completed').length > 0 ? '85%' : '0%'}
-                                    </p>
-                                    <p className="text-gray-400 text-sm">contest completion rate</p>
-                                </div>
-
-                                <div className="bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-500/30 rounded-xl p-6">
-                                    <h3 className="text-lg font-semibold text-white mb-2">Avg Duration</h3>
-                                    <p className="text-3xl font-bold text-yellow-400">2.5h</p>
-                                    <p className="text-gray-400 text-sm">average contest duration</p>
-                                </div>
-                            </div>
-
-                            <div className="text-center py-12">
-                                <div className="w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <HiChartBar className="text-3xl text-gray-400" />
-                                </div>
-                                <h3 className="text-xl font-semibold text-white mb-2">Detailed Analytics Coming Soon</h3>
-                                <p className="text-gray-400">Advanced analytics and reporting features will be available soon</p>
-                            </div>
                         </div>
                     </div>
                 )}
