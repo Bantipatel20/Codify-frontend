@@ -1,8 +1,8 @@
 // src/components/client/PracticeProblems.js
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HiCode, HiFilter, HiSearch, HiPlay, HiFire, HiStar, HiRefresh } from 'react-icons/hi';
-import axios from 'axios';
+import { HiCode, HiFilter, HiSearch, HiPlay,  HiStar, HiRefresh } from 'react-icons/hi';
+import { problemsAPI } from '../../services/api'; // Import your API service
 
 const PracticeProblems = () => {
   const navigate = useNavigate();
@@ -34,15 +34,16 @@ const PracticeProblems = () => {
   const fetchProblems = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/problems', {
-        params: {
-          limit: 100, // Get more problems for practice
-          page: 1
-        }
+      setError(null);
+      
+      // Use your API service instead of direct axios
+      const response = await problemsAPI.getAllProblems({
+        limit: 100,
+        page: 1
       });
 
-      if (response.data.success) {
-        const problemsData = response.data.data.map(problem => ({
+      if (response.success) {
+        const problemsData = response.data.map(problem => ({
           ...problem,
           solved: Math.random() > 0.7, // Mock solved status
           attempts: Math.floor(Math.random() * 5)
@@ -58,10 +59,12 @@ const PracticeProblems = () => {
         const hard = problemsData.filter(p => p.difficulty === 'Hard').length;
         
         setStats({ total, solved, easy, medium, hard });
+      } else {
+        throw new Error(response.error || 'Failed to fetch problems');
       }
     } catch (err) {
       console.error('Error fetching problems:', err);
-      setError('Failed to load problems. Please try again.');
+      setError('Failed to load problems. Please make sure your backend server is running on port 5000.');
     } finally {
       setLoading(false);
     }
@@ -69,16 +72,23 @@ const PracticeProblems = () => {
 
   const fetchTags = async () => {
     try {
-      const response = await axios.get('/api/problems/meta/tags');
-      if (response.data.success) {
-        setAvailableTags(['All', ...response.data.data]);
+      // Use your API service instead of direct axios
+      const response = await problemsAPI.getAllTags();
+      
+      if (response.success && response.data) {
+        setAvailableTags(['All', ...response.data]);
+      } else {
+        // Fallback tags if API fails
+        setAvailableTags(['All', 'Array', 'String', 'Hash Table', 'Dynamic Programming', 'Tree', 'Graph']);
       }
     } catch (err) {
       console.error('Error fetching tags:', err);
+      // Use fallback tags
       setAvailableTags(['All', 'Array', 'String', 'Hash Table', 'Dynamic Programming', 'Tree', 'Graph']);
     }
   };
 
+  // Rest of your component code remains the same...
   const filterProblems = () => {
     let filtered = problems;
 
@@ -119,23 +129,21 @@ const PracticeProblems = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-          <p className="text-white text-lg">Loading problems...</p>
-        </div>
-      </div>
-    );
-  }
-
+  // Enhanced error display with more debugging information
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center max-w-md">
           <div className="text-red-400 text-4xl mb-4">⚠️</div>
           <p className="text-white text-lg mb-4">{error}</p>
+          <div className="text-gray-400 text-sm mb-6">
+            <p>Please check:</p>
+            <ul className="text-left mt-2 space-y-1">
+              <li>• Backend server is running on port 5000</li>
+              <li>• MongoDB connection is established</li>
+              <li>• API routes are properly configured</li>
+            </ul>
+          </div>
           <button 
             onClick={fetchProblems}
             className="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-xl transition-all duration-300 mx-auto"
@@ -148,8 +156,21 @@ const PracticeProblems = () => {
     );
   }
 
+  // Rest of your component JSX remains exactly the same...
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-white text-lg">Loading problems...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 p-8">
+      {/* Your existing JSX content remains exactly the same */}
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="text-center mb-12">

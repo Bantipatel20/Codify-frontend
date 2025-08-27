@@ -1,8 +1,8 @@
 // src/components/client/Contests.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HiStar, HiCalendar, HiClock, HiUsers, HiPlay, HiEye, HiFilter, HiRefresh } from 'react-icons/hi';
-import axios from 'axios';
+import { contestAPI, authAPI } from '../../services/api'; // Import your API services
 
 const Contests = () => {
   const navigate = useNavigate();
@@ -13,6 +13,20 @@ const Contests = () => {
   const [statusFilter, setStatusFilter] = useState('All');
   const [userProfile, setUserProfile] = useState(null);
 
+  // Memoize filter function to prevent unnecessary re-renders
+  const filterContests = useCallback(() => {
+    let filtered = contests;
+
+    if (statusFilter !== 'All') {
+      filtered = filtered.filter(contest => contest.status === statusFilter);
+    }
+
+    // Only show contests user is eligible for
+    filtered = filtered.filter(contest => contest.isEligible);
+
+    setFilteredContests(filtered);
+  }, [contests, statusFilter]);
+
   useEffect(() => {
     fetchUserProfile();
     fetchContests();
@@ -20,19 +34,14 @@ const Contests = () => {
 
   useEffect(() => {
     filterContests();
-  }, [contests, statusFilter]);
+  }, [filterContests]);
 
   const fetchUserProfile = async () => {
     try {
-      // Get user profile to check eligibility for contests
-      const token = localStorage.getItem('token');
-      if (token) {
-        const response = await axios.get('/api/auth/profile', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (response.data.success) {
-          setUserProfile(response.data.data);
-        }
+      // Get user from localStorage first
+      const currentUser = authAPI.getCurrentUser();
+      if (currentUser) {
+        setUserProfile(currentUser);
       }
     } catch (err) {
       console.error('Error fetching user profile:', err);
@@ -42,19 +51,27 @@ const Contests = () => {
   const fetchContests = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/contests');
+      setError(null);
       
-      if (response.data.success) {
-        const contestsData = response.data.data.map(contest => ({
+      // Use your API service instead of direct axios
+      const response = await contestAPI.getAllContests({
+        limit: 100,
+        page: 1
+      });
+      
+      if (response.success) {
+        const contestsData = response.data.map(contest => ({
           ...contest,
           isEligible: checkEligibility(contest),
           isRegistered: checkRegistration(contest)
         }));
         setContests(contestsData);
+      } else {
+        throw new Error(response.error || 'Failed to fetch contests');
       }
     } catch (err) {
       console.error('Error fetching contests:', err);
-      setError('Failed to load contests. Please try again.');
+      setError('Failed to load contests. Please make sure your backend server is running and contest routes are configured.');
     } finally {
       setLoading(false);
     }
@@ -68,22 +85,22 @@ const Contests = () => {
     const criteria = contest.filterCriteria;
     
     // Check department filter
-    if (criteria.department && criteria.department !== userProfile.department) {
+    if (criteria?.department && criteria.department !== userProfile.department) {
       return false;
     }
     
     // Check semester filter
-    if (criteria.semester && criteria.semester !== userProfile.semester) {
+    if (criteria?.semester && criteria.semester !== userProfile.semester) {
       return false;
     }
     
     // Check division filter
-    if (criteria.division && criteria.division !== userProfile.division) {
+    if (criteria?.division && criteria.division !== userProfile.division) {
       return false;
     }
     
     // Check batch filter
-    if (criteria.batch && criteria.batch !== userProfile.batch) {
+    if (criteria?.batch && criteria.batch !== userProfile.batch) {
       return false;
     }
     
@@ -92,20 +109,7 @@ const Contests = () => {
 
   const checkRegistration = (contest) => {
     if (!userProfile) return false;
-    return contest.participants.some(p => p.userId === userProfile._id);
-  };
-
-  const filterContests = () => {
-    let filtered = contests;
-
-    if (statusFilter !== 'All') {
-      filtered = filtered.filter(contest => contest.status === statusFilter);
-    }
-
-    // Only show contests user is eligible for
-    filtered = filtered.filter(contest => contest.isEligible);
-
-    setFilteredContests(filtered);
+    return contest.participants?.some(p => p.userId === userProfile._id || p === userProfile._id);
   };
 
   const handleRegister = async (contestId) => {
@@ -115,17 +119,18 @@ const Contests = () => {
         return;
       }
 
-      const response = await axios.post(`/api/contests/${contestId}/register`, {
-        userId: userProfile._id
-      });
+      // Use your API service instead of direct axios
+      const response = await contestAPI.registerParticipant(contestId, userProfile._id);
 
-      if (response.data.success) {
+      if (response.success) {
         alert('Successfully registered for contest!');
         fetchContests(); // Refresh contests to update registration status
+      } else {
+        throw new Error(response.error || 'Failed to register for contest');
       }
     } catch (err) {
       console.error('Error registering for contest:', err);
-      alert(err.response?.data?.error || 'Failed to register for contest');
+      alert(err.message || 'Failed to register for contest');
     }
   };
 
@@ -177,9 +182,17 @@ const Contests = () => {
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center max-w-md">
           <div className="text-red-400 text-4xl mb-4">⚠️</div>
           <p className="text-white text-lg mb-4">{error}</p>
+          <div className="text-gray-400 text-sm mb-6">
+            <p>Please check:</p>
+            <ul className="text-left mt-2 space-y-1">
+              <li>• Backend server is running on port 5000</li>
+              <li>• Contest routes are properly configured</li>
+              <li>• Database connection is established</li>
+            </ul>
+          </div>
           <button 
             onClick={fetchContests}
             className="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-xl transition-all duration-300 mx-auto"
@@ -192,6 +205,7 @@ const Contests = () => {
     );
   }
 
+  // Rest of your JSX remains the same...
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 p-8">
       <div className="max-w-7xl mx-auto">
@@ -304,11 +318,11 @@ const Contests = () => {
                     </div>
                     <div className="flex items-center space-x-2 text-sm text-gray-400">
                       <HiUsers className="text-purple-400" />
-                      <span>{contest.participants.length}/{contest.maxParticipants} participants</span>
+                      <span>{contest.participants?.length || 0}/{contest.maxParticipants} participants</span>
                     </div>
                     <div className="flex items-center space-x-2 text-sm text-gray-400">
                       <HiStar className="text-orange-400" />
-                      <span>{contest.problems.length} problems</span>
+                      <span>{contest.problems?.length || 0} problems</span>
                     </div>
                   </div>
 
@@ -319,16 +333,18 @@ const Contests = () => {
                   )}
 
                   {/* Problems Preview */}
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {contest.problems.slice(0, 3).map((problem, index) => (
-                      <span key={index} className="text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded">
-                        {problem.title} ({problem.difficulty})
-                      </span>
-                    ))}
-                    {contest.problems.length > 3 && (
-                      <span className="text-xs text-gray-500">+{contest.problems.length - 3} more</span>
-                    )}
-                  </div>
+                  {contest.problems && contest.problems.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {contest.problems.slice(0, 3).map((problem, index) => (
+                        <span key={index} className="text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded">
+                          {problem.title} ({problem.difficulty})
+                        </span>
+                      ))}
+                      {contest.problems.length > 3 && (
+                        <span className="text-xs text-gray-500">+{contest.problems.length - 3} more</span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-col space-y-2 ml-6">

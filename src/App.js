@@ -5,7 +5,7 @@ import LandingPage from './components/LandingPage';
 import LoginPage from './components/LoginPage';
 import AdminDashboard from './components/admin/AdminDashboard';
 import ClientLayout from './components/client/ClientLayout';
-import ClientDashboard from './components/client/ClientDashboard';
+
 import ProblemManagement from './components/admin/ProblemManagement';
 import StudentManagement from './components/admin/StudentManagement';
 import SubmissionTracking from './components/admin/SubmissionTracking';
@@ -37,8 +37,8 @@ const App = () => {
                 
                 {/* Client Routes with Layout */}
                 <Route path="/client" element={<ClientLayout />}>
-                    <Route index element={<Navigate to="/client/dashboard" replace />} />
-                    <Route path="dashboard" element={<ClientDashboard />} />
+                
+                 
                     <Route path="practice" element={<PracticeProblems />} />
                     <Route path="contests" element={<Contests />} />
                     <Route path="submissions" element={<Submissions />} />

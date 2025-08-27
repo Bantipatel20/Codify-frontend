@@ -1,14 +1,14 @@
 // src/components/client/ClientLayout.js
 import React from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { HiHome, HiCode, HiDocumentText,  HiLogout, HiSparkles, HiStar } from 'react-icons/hi';
+import {  HiCode, HiDocumentText,  HiLogout, HiSparkles, HiStar } from 'react-icons/hi';
 
 const ClientLayout = () => {
     const location = useLocation();
     const navigate = useNavigate();
 
     const navItems = [
-        { path: '/client/dashboard', label: 'Dashboard', icon: HiHome },
+      
         { path: '/client/practice', label: 'Practice', icon: HiCode },
         { path: '/client/contests', label: 'Contests', icon: HiStar }, // Changed from HiTrophy to HiStar
         { path: '/client/submissions', label: 'Submissions', icon: HiDocumentText },
