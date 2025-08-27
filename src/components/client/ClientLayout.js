@@ -1,7 +1,7 @@
 // src/components/client/ClientLayout.js
 import React from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { HiHome, HiCode, HiDocumentText, HiChartBar, HiUser, HiLogout, HiSparkles } from 'react-icons/hi';
+import { HiHome, HiCode, HiDocumentText,  HiLogout, HiSparkles, HiStar } from 'react-icons/hi';
 
 const ClientLayout = () => {
     const location = useLocation();
@@ -10,9 +10,9 @@ const ClientLayout = () => {
     const navItems = [
         { path: '/client/dashboard', label: 'Dashboard', icon: HiHome },
         { path: '/client/practice', label: 'Practice', icon: HiCode },
+        { path: '/client/contests', label: 'Contests', icon: HiStar }, // Changed from HiTrophy to HiStar
         { path: '/client/submissions', label: 'Submissions', icon: HiDocumentText },
-        { path: '/client/performance', label: 'Performance', icon: HiChartBar },
-        { path: '/client/profile', label: 'Profile', icon: HiUser },
+      
     ];
 
     const handleLogout = () => {
@@ -32,7 +32,7 @@ const ClientLayout = () => {
                             </div>
                             <div>
                                 <span className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                                    HackForge
+                                    Codify
                                 </span>
                                 <p className="text-xs text-gray-300">Student Portal</p>
                             </div>
@@ -79,8 +79,6 @@ const ClientLayout = () => {
                             );
                         })}
                     </nav>
-
-                    
                 </div>
 
                 {/* Main Content Area */}

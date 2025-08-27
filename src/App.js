@@ -12,14 +12,18 @@ import SubmissionTracking from './components/admin/SubmissionTracking';
 import Settings from './components/admin/Settings';
 import PracticeProblems from './components/client/PracticeProblems';
 import Contest from './components/admin/Contest';
+import Contests from './components/client/Contests';
+import ContestDetails from './components/client/ContestDetails';
+import ContestParticipation from './components/client/ContestParticipation';
 import Submissions from './components/client/Submissions';
-import PerformanceTracking from './components/client/PerformanceTracking';
-import ProfilePage from './components/client/ProfilePage';
-import TwoSumProblem from './components/client/Compiler';
+
+import Compiler from './components/client/Compiler';
+
 const App = () => {
     return (
         <Router>
             <Routes>
+                {/* Public Routes */}
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/login" element={<LoginPage />} />
                 
@@ -33,14 +37,21 @@ const App = () => {
                 
                 {/* Client Routes with Layout */}
                 <Route path="/client" element={<ClientLayout />}>
-    <Route index element={<Navigate to="/client/dashboard" replace />} />
-    <Route path="dashboard" element={<ClientDashboard />} />
-    <Route path="practice" element={<PracticeProblems />} />
-    <Route path="submissions" element={<Submissions />} />
-    <Route path="performance" element={<PerformanceTracking />} />
-    <Route path="profile" element={<ProfilePage />} />
-    <Route path="practice/complier" element={<TwoSumProblem />} /> {/* Compiler route */}
-</Route>
+                    <Route index element={<Navigate to="/client/dashboard" replace />} />
+                    <Route path="dashboard" element={<ClientDashboard />} />
+                    <Route path="practice" element={<PracticeProblems />} />
+                    <Route path="contests" element={<Contests />} />
+                    <Route path="submissions" element={<Submissions />} />
+                    
+                </Route>
+
+                {/* Full-screen Client Routes (outside layout) */}
+                <Route path="/client/practice/compiler" element={<Compiler />} />
+                <Route path="/client/contests/:id" element={<ContestDetails />} />
+                <Route path="/client/contests/:id/participate" element={<ContestParticipation />} />
+                
+                {/* Catch-all redirect */}
+                <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
         </Router>
     );

@@ -1,36 +1,114 @@
 // src/components/client/PracticeProblems.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HiCode, HiFilter, HiSearch, HiPlay, HiFire, HiStar } from 'react-icons/hi';
-
-const problems = [
-  { id: 1, title: 'Two Sum', difficulty: 'Easy', category: 'Array', points: 100, solved: true, attempts: 3 },
-  { id: 2, title: 'Add Two Numbers', difficulty: 'Medium', category: 'Linked List', points: 200, solved: false, attempts: 1 },
-  { id: 3, title: 'Longest Substring Without Repeating Characters', difficulty: 'Medium', category: 'String', points: 250, solved: true, attempts: 5 },
-  { id: 4, title: 'Median of Two Sorted Arrays', difficulty: 'Hard', category: 'Array', points: 400, solved: false, attempts: 0 },
-  { id: 5, title: 'Valid Parentheses', difficulty: 'Easy', category: 'Stack', points: 100, solved: true, attempts: 2 },
-  { id: 6, title: 'Binary Search', difficulty: 'Easy', category: 'Search', points: 150, solved: false, attempts: 0 }
-];
+import { HiCode, HiFilter, HiSearch, HiPlay, HiFire, HiStar, HiRefresh } from 'react-icons/hi';
+import axios from 'axios';
 
 const PracticeProblems = () => {
   const navigate = useNavigate();
+  const [problems, setProblems] = useState([]);
+  const [filteredProblems, setFilteredProblems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [difficultyFilter, setDifficultyFilter] = useState('All');
-  const [categoryFilter, setCategoryFilter] = useState('All');
-
-  const filteredProblems = problems.filter(problem => {
-    const matchesSearch = problem.title.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesDifficulty = difficultyFilter === 'All' || problem.difficulty === difficultyFilter;
-    const matchesCategory = categoryFilter === 'All' || problem.category === categoryFilter;
-    return matchesSearch && matchesDifficulty && matchesCategory;
+  const [tagFilter, setTagFilter] = useState('All');
+  const [availableTags, setAvailableTags] = useState([]);
+  const [stats, setStats] = useState({
+    total: 0,
+    solved: 0,
+    easy: 0,
+    medium: 0,
+    hard: 0
   });
 
-  const categories = ['All', ...new Set(problems.map(p => p.category))];
-  const difficulties = ['All', 'Easy', 'Medium', 'Hard'];
+  useEffect(() => {
+    fetchProblems();
+    fetchTags();
+  }, []);
 
-  function gotoCompilerHandler(problem) {
-    navigate('/client/practice/complier', { state: { problem } });
-  }
+  useEffect(() => {
+    filterProblems();
+  }, [problems, searchTerm, difficultyFilter, tagFilter]);
+
+  const fetchProblems = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get('/api/problems', {
+        params: {
+          limit: 100, // Get more problems for practice
+          page: 1
+        }
+      });
+
+      if (response.data.success) {
+        const problemsData = response.data.data.map(problem => ({
+          ...problem,
+          solved: Math.random() > 0.7, // Mock solved status
+          attempts: Math.floor(Math.random() * 5)
+        }));
+        
+        setProblems(problemsData);
+        
+        // Calculate stats
+        const total = problemsData.length;
+        const solved = problemsData.filter(p => p.solved).length;
+        const easy = problemsData.filter(p => p.difficulty === 'Easy').length;
+        const medium = problemsData.filter(p => p.difficulty === 'Medium').length;
+        const hard = problemsData.filter(p => p.difficulty === 'Hard').length;
+        
+        setStats({ total, solved, easy, medium, hard });
+      }
+    } catch (err) {
+      console.error('Error fetching problems:', err);
+      setError('Failed to load problems. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchTags = async () => {
+    try {
+      const response = await axios.get('/api/problems/meta/tags');
+      if (response.data.success) {
+        setAvailableTags(['All', ...response.data.data]);
+      }
+    } catch (err) {
+      console.error('Error fetching tags:', err);
+      setAvailableTags(['All', 'Array', 'String', 'Hash Table', 'Dynamic Programming', 'Tree', 'Graph']);
+    }
+  };
+
+  const filterProblems = () => {
+    let filtered = problems;
+
+    // Filter by search term
+    if (searchTerm) {
+      filtered = filtered.filter(problem => 
+        problem.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        problem.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        problem.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
+    }
+
+    // Filter by difficulty
+    if (difficultyFilter !== 'All') {
+      filtered = filtered.filter(problem => problem.difficulty === difficultyFilter);
+    }
+
+    // Filter by tag
+    if (tagFilter !== 'All') {
+      filtered = filtered.filter(problem => 
+        problem.tags?.includes(tagFilter.toLowerCase())
+      );
+    }
+
+    setFilteredProblems(filtered);
+  };
+
+  const handleSolveProblem = (problem) => {
+    navigate('/client/practice/compiler', { state: { problem } });
+  };
 
   const getDifficultyColor = (difficulty) => {
     switch (difficulty) {
@@ -40,6 +118,35 @@ const PracticeProblems = () => {
       default: return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-white text-lg">Loading problems...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-400 text-4xl mb-4">⚠️</div>
+          <p className="text-white text-lg mb-4">{error}</p>
+          <button 
+            onClick={fetchProblems}
+            className="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-xl transition-all duration-300 mx-auto"
+          >
+            <HiRefresh className="text-lg" />
+            <span>Try Again</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 p-8">
@@ -54,16 +161,14 @@ const PracticeProblems = () => {
         </div>
 
         {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-6 mb-8">
           <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-400 text-sm mb-1">Total Problems</p>
-                <p className="text-2xl font-bold text-white">{problems.length}</p>
+                <p className="text-gray-400 text-sm mb-1">Total</p>
+                <p className="text-2xl font-bold text-white">{stats.total}</p>
               </div>
-              <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
-                <HiCode className="text-blue-400 text-xl" />
-              </div>
+              <HiCode className="text-blue-400 text-xl" />
             </div>
           </div>
 
@@ -71,27 +176,39 @@ const PracticeProblems = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-400 text-sm mb-1">Solved</p>
-                <p className="text-2xl font-bold text-green-400">
-                  {problems.filter(p => p.solved).length}
-                </p>
+                <p className="text-2xl font-bold text-green-400">{stats.solved}</p>
               </div>
-              <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center">
-                <HiStar className="text-green-400 text-xl" />
-              </div>
+              <HiStar className="text-green-400 text-xl" />
             </div>
           </div>
 
           <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-400 text-sm mb-1">Success Rate</p>
-                <p className="text-2xl font-bold text-yellow-400">
-                  {Math.round((problems.filter(p => p.solved).length / problems.length) * 100)}%
-                </p>
+                <p className="text-gray-400 text-sm mb-1">Easy</p>
+                <p className="text-2xl font-bold text-green-400">{stats.easy}</p>
               </div>
-              <div className="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center">
-                <HiFire className="text-yellow-400 text-xl" />
+              <div className="w-3 h-3 bg-green-400 rounded-full"></div>
+            </div>
+          </div>
+
+          <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 text-sm mb-1">Medium</p>
+                <p className="text-2xl font-bold text-yellow-400">{stats.medium}</p>
               </div>
+              <div className="w-3 h-3 bg-yellow-400 rounded-full"></div>
+            </div>
+          </div>
+
+          <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 text-sm mb-1">Hard</p>
+                <p className="text-2xl font-bold text-red-400">{stats.hard}</p>
+              </div>
+              <div className="w-3 h-3 bg-red-400 rounded-full"></div>
             </div>
           </div>
         </div>
@@ -102,7 +219,7 @@ const PracticeProblems = () => {
             <HiFilter className="text-blue-400 text-xl" />
             <h3 className="text-lg font-semibold text-white">Filter Problems</h3>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="relative">
               <HiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <input
@@ -113,28 +230,35 @@ const PracticeProblems = () => {
                 className="w-full bg-gray-800/50 border border-gray-600 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <div>
-              <select
-                value={difficultyFilter}
-                onChange={(e) => setDifficultyFilter(e.target.value)}
-                className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {difficulties.map(difficulty => (
-                  <option key={difficulty} value={difficulty}>{difficulty}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {categories.map(category => (
-                  <option key={category} value={category}>{category}</option>
-                ))}
-              </select>
-            </div>
+            <select
+              value={difficultyFilter}
+              onChange={(e) => setDifficultyFilter(e.target.value)}
+              className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="All">All Difficulties</option>
+              <option value="Easy">Easy</option>
+              <option value="Medium">Medium</option>
+              <option value="Hard">Hard</option>
+            </select>
+            <select
+              value={tagFilter}
+              onChange={(e) => setTagFilter(e.target.value)}
+              className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {availableTags.map(tag => (
+                <option key={tag} value={tag}>{tag}</option>
+              ))}
+            </select>
+            <button 
+              onClick={() => {
+                setSearchTerm('');
+                setDifficultyFilter('All');
+                setTagFilter('All');
+              }}
+              className="bg-gray-700 hover:bg-gray-600 text-white font-medium py-3 px-4 rounded-lg transition-all duration-300"
+            >
+              Clear Filters
+            </button>
           </div>
         </div>
 
@@ -142,13 +266,13 @@ const PracticeProblems = () => {
         <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl overflow-hidden">
           <div className="p-6 border-b border-white/20">
             <h2 className="text-2xl font-bold text-white">
-              Problems ({filteredProblems.length})
+              Problems ({filteredProblems.length} of {problems.length})
             </h2>
           </div>
           
           <div className="divide-y divide-gray-700">
             {filteredProblems.map((problem) => (
-              <div key={problem.id} className="p-6 hover:bg-white/5 transition-all duration-300">
+              <div key={problem._id} className="p-6 hover:bg-white/5 transition-all duration-300">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center space-x-4 mb-2">
@@ -161,19 +285,35 @@ const PracticeProblems = () => {
                       <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getDifficultyColor(problem.difficulty)}`}>
                         {problem.difficulty}
                       </span>
-                      <span className="text-xs text-gray-400 bg-gray-700 px-2 py-1 rounded-full">
-                        {problem.category}
-                      </span>
                     </div>
+                    
+                    <p className="text-sm text-gray-400 mb-3 line-clamp-2">
+                      {problem.description.substring(0, 150)}...
+                    </p>
+                    
                     <div className="flex items-center space-x-6 text-sm text-gray-400">
-                      <span>💰 {problem.points} points</span>
+                      <span>📈 {problem.totalSubmissions || 0} submissions</span>
+                      <span>✅ {problem.successRate || 0}% success rate</span>
                       <span>🎯 {problem.attempts} attempts</span>
                       {problem.solved && <span className="text-green-400">✅ Solved</span>}
                     </div>
+                    
+                    {problem.tags && problem.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-3">
+                        {problem.tags.slice(0, 3).map((tag, tagIndex) => (
+                          <span key={tagIndex} className="text-xs text-gray-400 bg-gray-700 px-2 py-1 rounded">
+                            {tag}
+                          </span>
+                        ))}
+                        {problem.tags.length > 3 && (
+                          <span className="text-xs text-gray-500">+{problem.tags.length - 3} more</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   
                   <button 
-                    onClick={() => gotoCompilerHandler(problem)}
+                    onClick={() => handleSolveProblem(problem)}
                     className={`flex items-center space-x-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 ${
                       problem.solved 
                         ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' 
