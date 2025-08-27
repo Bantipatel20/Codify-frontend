@@ -1,9 +1,558 @@
 // src/components/admin/StudentManagement.js
 import React, { useState, useEffect, useCallback } from 'react';
-import { HiUserAdd, HiUpload, HiUsers, HiEye, HiTrash, HiPencil, HiSearch, HiRefresh, HiArrowLeft } from 'react-icons/hi';
+import { HiUserAdd, HiUpload, HiDownload, HiUsers, HiEye, HiTrash, HiPencil, HiSearch, HiRefresh, HiArrowLeft, HiX, HiCheckCircle, HiExclamation } from 'react-icons/hi';
 import * as XLSX from 'xlsx';
 import { userAPI } from '../../services/api';
 
+// Excel Upload Component
+const ExcelUpload = ({ onStudentsUploaded, existingStudents }) => {
+    const [showFormatGuide, setShowFormatGuide] = useState(false);
+    const [uploadResults, setUploadResults] = useState(null);
+    const [isUploading, setIsUploading] = useState(false);
+
+    // Sample data for template
+    const sampleData = [
+        {
+            name: "Banti",
+            email: "23cs050@charusat.edu.in",
+            username: "23cs050",
+            password: "23cs050123",
+            student_id: "23cs050",
+            department: "cse",
+            batch: "c1",
+            div: "1"
+        },
+       
+        
+    ];
+
+    const downloadSampleExcel = () => {
+        try {
+            const ws = XLSX.utils.json_to_sheet(sampleData);
+            
+            // Set column widths
+            const colWidths = [
+                { wch: 20 }, // name
+                { wch: 25 }, // email
+                { wch: 15 }, // username
+                { wch: 15 }, // password
+                { wch: 12 }, // student_id
+                { wch: 20 }, // department
+                { wch: 10 }, // batch
+                { wch: 8 }   // div
+            ];
+            ws['!cols'] = colWidths;
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Students");
+            XLSX.writeFile(wb, "student_upload_template.xlsx");
+        } catch (error) {
+            console.error('Error downloading template:', error);
+            alert('Failed to download template. Please try again.');
+        }
+    };
+
+    const validateStudentData = (jsonData) => {
+        const validStudents = [];
+        const errors = [];
+
+        jsonData.forEach((row, index) => {
+            const rowNumber = index + 2; // +2 because index starts at 0 and we have header row
+            
+            // Get values with multiple possible column names
+            const name = row.name || row.Name || row.NAME;
+            const email = row.email || row.Email || row.EMAIL;
+            const student_id = row.student_id || row['Student ID'] || row.StudentId || row.STUDENT_ID;
+            const username = row.username || row.Username || row.USERNAME;
+            const password = row.password || row.Password || row.PASSWORD;
+            const department = row.department || row.Department || row.DEPARTMENT;
+            const batch = row.batch || row.Batch || row.BATCH || row.year || row.Year;
+            const div = row.div || row.Division || row.Section || row.DIV || row.DIVISION || row.SECTION;
+
+            // Check required fields
+            if (!name || !email || !student_id) {
+                errors.push({
+                    row: rowNumber,
+                    error: 'Missing required fields (name, email, student_id)',
+                    data: { name, email, student_id }
+                });
+                return;
+            }
+
+            // Validate name
+            if (name.length < 2) {
+                errors.push({
+                    row: rowNumber,
+                    error: 'Name must be at least 2 characters long',
+                    data: { name }
+                });
+                return;
+            }
+
+            // Email validation
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                errors.push({
+                    row: rowNumber,
+                    error: 'Invalid email format',
+                    data: { email }
+                });
+                return;
+            }
+
+            // Student ID validation
+            if (student_id.length < 3) {
+                errors.push({
+                    row: rowNumber,
+                    error: 'Student ID must be at least 3 characters long',
+                    data: { student_id }
+                });
+                return;
+            }
+
+            // Check for duplicate student_id in current batch
+            if (validStudents.some(s => s.student_id === student_id)) {
+                errors.push({
+                    row: rowNumber,
+                    error: 'Duplicate student ID in upload file',
+                    data: { student_id }
+                });
+                return;
+            }
+
+            // Check if student already exists
+            if (existingStudents.some(s => s.student_id === student_id)) {
+                errors.push({
+                    row: rowNumber,
+                    error: 'Student with this ID already exists in database',
+                    data: { student_id }
+                });
+                return;
+            }
+
+            if (existingStudents.some(s => s.email === email)) {
+                errors.push({
+                    row: rowNumber,
+                    error: 'Student with this email already exists in database',
+                    data: { email }
+                });
+                return;
+            }
+
+            // Generate username if not provided
+            const finalUsername = username || email.split('@')[0];
+            
+            // Check username uniqueness
+            if (existingStudents.some(s => s.username === finalUsername) || 
+                validStudents.some(s => s.username === finalUsername)) {
+                errors.push({
+                    row: rowNumber,
+                    error: 'Username already exists or would be duplicate',
+                    data: { username: finalUsername }
+                });
+                return;
+            }
+
+            validStudents.push({
+                name: name.trim(),
+                email: email.trim().toLowerCase(),
+                username: finalUsername.trim(),
+                password: password || 'defaultPassword123',
+                student_id: student_id.trim(),
+                department: department || 'Not specified',
+                batch: batch || new Date().getFullYear().toString(),
+                div: div || 'A',
+                status: 'Active',
+                solved: 0,
+                avgScore: 0
+            });
+        });
+
+        return { validStudents, errors };
+    };
+
+    const handleFileUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Validate file type
+        const validTypes = [
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.ms-excel'
+        ];
+        
+        if (!validTypes.includes(file.type)) {
+            alert('Please upload a valid Excel file (.xlsx or .xls)');
+            e.target.value = '';
+            return;
+        }
+
+        // Validate file size (max 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+            alert('File size should be less than 5MB');
+            e.target.value = '';
+            return;
+        }
+
+        setIsUploading(true);
+        setUploadResults(null);
+
+        const reader = new FileReader();
+
+        reader.onload = async (event) => {
+            try {
+                const data = event.target.result;
+                const workbook = XLSX.read(data, { type: 'binary' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+
+                if (jsonData.length === 0) {
+                    alert('The Excel file appears to be empty. Please check your file.');
+                    setIsUploading(false);
+                    return;
+                }
+
+                // Validate data
+                const { validStudents, errors } = validateStudentData(jsonData);
+
+                if (errors.length > 0 && validStudents.length === 0) {
+                    setUploadResults({
+                        success: false,
+                        message: 'No valid students found in the file.',
+                        errors,
+                        validCount: 0,
+                        errorCount: errors.length
+                    });
+                    setIsUploading(false);
+                    return;
+                }
+
+                if (errors.length > 0) {
+                    const continueUpload = window.confirm(
+                        `Found ${errors.length} error(s) and ${validStudents.length} valid student(s).\n\nDo you want to continue uploading the valid students?`
+                    );
+                    if (!continueUpload) {
+                        setIsUploading(false);
+                        return;
+                    }
+                }
+
+                // Upload students
+                let successCount = 0;
+                let uploadErrors = [];
+
+                for (let i = 0; i < validStudents.length; i++) {
+                    const student = validStudents[i];
+                    try {
+                        await userAPI.createUser(student);
+                        successCount++;
+                    } catch (error) {
+                        console.error('Error creating student:', student, error);
+                        uploadErrors.push({
+                            student: `${student.name} (${student.student_id})`,
+                            error: error.message || 'Unknown error'
+                        });
+                    }
+                }
+
+                // Set results
+                setUploadResults({
+                    success: successCount > 0,
+                    message: `Upload completed: ${successCount} students added successfully`,
+                    errors: [...errors, ...uploadErrors.map(e => ({ error: e.error, data: { student: e.student } }))],
+                    validCount: successCount,
+                    errorCount: errors.length + uploadErrors.length,
+                    totalProcessed: jsonData.length
+                });
+
+                // Notify parent component
+                if (successCount > 0 && onStudentsUploaded) {
+                    onStudentsUploaded();
+                }
+
+            } catch (error) {
+                console.error('Error processing Excel file:', error);
+                setUploadResults({
+                    success: false,
+                    message: 'Failed to process Excel file. Please check the format and try again.',
+                    errors: [{ error: error.message, data: {} }],
+                    validCount: 0,
+                    errorCount: 1
+                });
+            }
+            
+            setIsUploading(false);
+        };
+
+        reader.readAsBinaryString(file);
+        // Reset file input
+        e.target.value = '';
+    };
+
+    return (
+        <div>
+            {/* Upload Buttons */}
+            <div className="flex flex-wrap gap-4 items-center">
+                <label className="flex items-center space-x-2 bg-gradient-to-r from-purple-500 to-pink-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all duration-300 transform hover:scale-105 cursor-pointer">
+                    <HiUpload className={`text-lg ${isUploading ? 'animate-pulse' : ''}`} />
+                    <span className="font-medium">
+                        {isUploading ? 'Uploading...' : 'Upload Excel'}
+                    </span>
+                    <input
+                        type="file"
+                        accept=".xlsx, .xls"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                        disabled={isUploading}
+                    />
+                </label>
+
+                <button 
+                    onClick={downloadSampleExcel}
+                    className="flex items-center space-x-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all duration-300 transform hover:scale-105"
+                >
+                    <HiDownload className="text-lg" />
+                    <span className="font-medium">Download Template</span>
+                </button>
+
+                <button 
+                    onClick={() => setShowFormatGuide(true)}
+                    className="flex items-center space-x-2 bg-gradient-to-r from-amber-500 to-orange-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all duration-300 transform hover:scale-105"
+                >
+                    <HiEye className="text-lg" />
+                    <span className="font-medium">Format Guide</span>
+                </button>
+            </div>
+
+            {/* Upload Results */}
+            {uploadResults && (
+                <div className="mt-6 bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
+                    <div className="flex items-start justify-between mb-4">
+                        <div className="flex items-center space-x-3">
+                            {uploadResults.success ? (
+                                <HiCheckCircle className="text-2xl text-green-400" />
+                            ) : (
+                                <HiExclamation className="text-2xl text-yellow-400" />
+                            )}
+                            <div>
+                                <h3 className="text-lg font-semibold text-white">Upload Results</h3>
+                                <p className="text-gray-300">{uploadResults.message}</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => setUploadResults(null)}
+                            className="text-gray-400 hover:text-white"
+                        >
+                            <HiX className="text-xl" />
+                        </button>
+                    </div>
+
+                    {/* Summary Stats */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                        <div className="bg-gray-800/50 rounded-lg p-3 text-center">
+                            <div className="text-xl font-bold text-blue-400">{uploadResults.totalProcessed || 0}</div>
+                            <div className="text-sm text-gray-400">Total Rows</div>
+                        </div>
+                        <div className="bg-gray-800/50 rounded-lg p-3 text-center">
+                            <div className="text-xl font-bold text-green-400">{uploadResults.validCount}</div>
+                            <div className="text-sm text-gray-400">Successful</div>
+                        </div>
+                        <div className="bg-gray-800/50 rounded-lg p-3 text-center">
+                            <div className="text-xl font-bold text-red-400">{uploadResults.errorCount}</div>
+                            <div className="text-sm text-gray-400">Errors</div>
+                        </div>
+                        <div className="bg-gray-800/50 rounded-lg p-3 text-center">
+                            <div className="text-xl font-bold text-yellow-400">
+                                {uploadResults.totalProcessed ? Math.round((uploadResults.validCount / uploadResults.totalProcessed) * 100) : 0}%
+                            </div>
+                            <div className="text-sm text-gray-400">Success Rate</div>
+                        </div>
+                    </div>
+
+                    {/* Error Details */}
+                    {uploadResults.errors && uploadResults.errors.length > 0 && (
+                        <div>
+                            <h4 className="text-white font-medium mb-3">Error Details:</h4>
+                            <div className="max-h-40 overflow-y-auto space-y-2">
+                                {uploadResults.errors.slice(0, 10).map((error, index) => (
+                                    <div key={index} className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+                                        <div className="text-red-400 text-sm font-medium">
+                                            {error.row ? `Row ${error.row}: ` : ''}{error.error}
+                                        </div>
+                                        {error.data && Object.keys(error.data).length > 0 && (
+                                            <div className="text-gray-400 text-xs mt-1">
+                                                Data: {JSON.stringify(error.data)}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                                {uploadResults.errors.length > 10 && (
+                                    <div className="text-gray-400 text-sm text-center py-2">
+                                        ... and {uploadResults.errors.length - 10} more errors
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Format Guide Modal */}
+            {showFormatGuide && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-8 max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-2xl font-bold text-white">Excel Upload Format Guide</h3>
+                            <button 
+                                onClick={() => setShowFormatGuide(false)}
+                                className="text-gray-400 hover:text-white text-2xl"
+                            >
+                                <HiX />
+                            </button>
+                        </div>
+
+                        <div className="space-y-6">
+                            {/* Required Columns */}
+                            <div>
+                                <h4 className="text-lg font-semibold text-white mb-3">Required Columns:</h4>
+                                <div className="bg-gray-800/50 rounded-lg p-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                                        <div className="space-y-2">
+                                            <div className="text-green-400 font-medium">✓ name * (required)</div>
+                                            <div className="text-gray-400 text-xs">Student's full name</div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <div className="text-green-400 font-medium">✓ email * (required)</div>
+                                            <div className="text-gray-400 text-xs">Valid email address</div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <div className="text-green-400 font-medium">✓ student_id * (required)</div>
+                                            <div className="text-gray-400 text-xs">Unique student identifier</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Optional Columns */}
+                            <div>
+                                <h4 className="text-lg font-semibold text-white mb-3">Optional Columns:</h4>
+                                <div className="bg-gray-800/50 rounded-lg p-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                                        <div className="space-y-1">
+                                            <div className="text-blue-400 font-medium">username</div>
+                                            <div className="text-gray-400 text-xs">Auto-generated if empty</div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <div className="text-blue-400 font-medium">password</div>
+                                            <div className="text-gray-400 text-xs">Default if not provided</div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <div className="text-blue-400 font-medium">department</div>
+                                            <div className="text-gray-400 text-xs">Student's department</div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <div className="text-blue-400 font-medium">batch</div>
+                                            <div className="text-gray-400 text-xs">Year/batch</div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <div className="text-blue-400 font-medium">div</div>
+                                            <div className="text-gray-400 text-xs">Division/section</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Sample Data Table */}
+                            <div>
+                                <h4 className="text-lg font-semibold text-white mb-3">Sample Data:</h4>
+                                <div className="overflow-x-auto bg-gray-800/50 rounded-lg">
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="border-b border-gray-600">
+                                                {Object.keys(sampleData[0]).map(key => (
+                                                    <th key={key} className="px-3 py-3 text-left text-gray-300 font-medium whitespace-nowrap">
+                                                        {key}
+                                                    </th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {sampleData.map((row, index) => (
+                                                <tr key={index} className="border-b border-gray-700">
+                                                    {Object.values(row).map((value, i) => (
+                                                        <td key={i} className="px-3 py-3 text-gray-300 whitespace-nowrap">
+                                                            {value}
+                                                        </td>
+                                                    ))}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {/* Important Notes */}
+                            <div>
+                                <h4 className="text-lg font-semibold text-white mb-3">Important Notes:</h4>
+                                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4">
+                                    <ul className="text-gray-300 space-y-2 text-sm">
+                                        <li className="flex items-start">
+                                            <span className="text-yellow-400 mr-2">•</span>
+                                            The first row must contain column headers
+                                        </li>
+                                        <li className="flex items-start">
+                                            <span className="text-yellow-400 mr-2">•</span>
+                                            Name, email, and student_id are required for each student
+                                        </li>
+                                        <li className="flex items-start">
+                                            <span className="text-yellow-400 mr-2">•</span>
+                                            Email addresses must be valid and unique
+                                        </li>
+                                        <li className="flex items-start">
+                                            <span className="text-yellow-400 mr-2">•</span>
+                                            Student IDs must be unique across all students
+                                        </li>
+                                        <li className="flex items-start">
+                                            <span className="text-yellow-400 mr-2">•</span>
+                                            If username is not provided, it will be generated from email
+                                        </li>
+                                        <li className="flex items-start">
+                                            <span className="text-yellow-400 mr-2">•</span>
+                                            Default password will be used if not specified
+                                        </li>
+                                        <li className="flex items-start">
+                                            <span className="text-yellow-400 mr-2">•</span>
+                                            Maximum file size: 5MB
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex justify-center space-x-4 pt-4">
+                                <button
+                                    onClick={downloadSampleExcel}
+                                    className="flex items-center space-x-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all duration-300"
+                                >
+                                    <HiDownload className="text-lg" />
+                                    <span>Download Sample Template</span>
+                                </button>
+                                <button
+                                    onClick={() => setShowFormatGuide(false)}
+                                    className="px-6 py-3 bg-gray-600 text-white rounded-xl hover:bg-gray-700 transition-all duration-300"
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// Main StudentManagement Component
 const StudentManagement = ({ onBack }) => {
     const [students, setStudents] = useState([]);
     const [filteredStudents, setFilteredStudents] = useState([]);
@@ -187,75 +736,6 @@ const StudentManagement = ({ onBack }) => {
         setEditingStudent(null);
     };
 
-    const handleFileChange = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-
-        reader.onload = async (event) => {
-            try {
-                setLoading(true);
-                const data = event.target.result;
-                const workbook = XLSX.read(data, { type: 'binary' });
-                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                const jsonData = XLSX.utils.sheet_to_json(firstSheet);
-
-                console.log('Excel data:', jsonData);
-
-                // Validate and process Excel data
-                const validStudents = jsonData.filter(row => 
-                    row.name && row.email && row.student_id
-                ).map(row => ({
-                    name: row.name || row.Name,
-                    email: row.email || row.Email,
-                    username: row.username || row.Username || row.email?.split('@')[0],
-                    password: row.password || row.Password || 'defaultPassword123',
-                    student_id: row.student_id || row['Student ID'] || row.StudentId,
-                    department: row.department || row.Department || 'Not specified',
-                    batch: row.batch || row.Batch || new Date().getFullYear().toString(),
-                    div: row.div || row.Division || row.Section || 'A',
-                    status: 'Active',
-                    solved: 0,
-                    avgScore: 0
-                }));
-
-                if (validStudents.length === 0) {
-                    alert('No valid student data found in the Excel file. Please check the format.');
-                    setLoading(false);
-                    return;
-                }
-
-                // Upload each student from Excel
-                let successCount = 0;
-                let errorCount = 0;
-
-                for (const student of validStudents) {
-                    try {
-                        await userAPI.createUser(student);
-                        successCount++;
-                    } catch (error) {
-                        console.error('Error creating student:', student, error);
-                        errorCount++;
-                    }
-                }
-
-                // Refresh the student list after bulk upload
-                await fetchStudents();
-                alert(`Import completed! ${successCount} students added successfully. ${errorCount} errors encountered.`);
-                setLoading(false);
-            } catch (error) {
-                console.error('Error importing students:', error);
-                alert('Failed to import students. Please check your Excel file format and try again.');
-                setLoading(false);
-            }
-        };
-
-        reader.readAsBinaryString(file);
-        // Reset file input
-        e.target.value = '';
-    };
-
     const getStatusColor = (status) => {
         switch (status.toLowerCase()) {
             case 'active':
@@ -320,16 +800,11 @@ const StudentManagement = ({ onBack }) => {
                         <span className="font-medium">{editingStudent ? 'Edit Student' : 'Add Student'}</span>
                     </button>
                     
-                    <label className="flex items-center space-x-2 bg-gradient-to-r from-purple-500 to-pink-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all duration-300 transform hover:scale-105 cursor-pointer">
-                        <HiUpload className="text-lg" />
-                        <span className="font-medium">Upload Excel</span>
-                        <input
-                            type="file"
-                            accept=".xlsx, .xls"
-                            onChange={handleFileChange}
-                            className="hidden"
-                        />
-                    </label>
+                    {/* Excel Upload Component */}
+                    <ExcelUpload 
+                        onStudentsUploaded={fetchStudents}
+                        existingStudents={students}
+                    />
 
                     <button 
                         onClick={fetchStudents}
