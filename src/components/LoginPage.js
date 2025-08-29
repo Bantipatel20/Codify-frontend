@@ -69,7 +69,7 @@ const LoginPage = () => {
                     navigate('/admin/dashboard');
                 } else {
                     console.log('✅ Navigating to client dashboard');
-                    navigate('/client');
+                    navigate('/client/practice');
                 }
             } else {
                 setError(data.error || 'Login failed');
