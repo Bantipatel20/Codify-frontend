@@ -38,7 +38,7 @@ const LandingPage = () => {
                                 <HiCode className="text-white text-xl" />
                             </div>
                             <span className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                                HackForge
+                                Codify
                             </span>
                         </div>
                         <Link 
