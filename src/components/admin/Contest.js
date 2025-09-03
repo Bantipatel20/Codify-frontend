@@ -1,7 +1,291 @@
 // src/components/admin/Contest.js
 import React, { useState, useEffect } from 'react';
-import { HiStar, HiPlus, HiUsers, HiCode, HiCalendar, HiClock, HiPencil, HiTrash, HiPlay, HiStop, HiChartBar, HiFilter, HiArrowLeft } from 'react-icons/hi';
+import { HiStar, HiPlus, HiUsers, HiCode, HiCalendar, HiClock, HiPencil, HiTrash, HiPlay, HiStop, HiChartBar, HiFilter, HiArrowLeft, HiX } from 'react-icons/hi';
 import { contestAPI, problemsAPI, userAPI } from '../../services/api';
+
+// Manual Problem Creation Component
+const ManualProblemModal = ({ onClose, onSave }) => {
+  const [problem, setProblem] = useState({
+    title: '',
+    description: '',
+    difficulty: 'Easy',
+    category: 'General',
+    points: 100,
+    inputFormat: '',
+    outputFormat: '',
+    constraints: '',
+    sampleInput: '',
+    sampleOutput: '',
+    explanation: '',
+    testCases: [
+      { input: '', expectedOutput: '', isHidden: false }
+    ]
+  });
+
+  const handleAddTestCase = () => {
+    setProblem({
+      ...problem,
+      testCases: [...problem.testCases, { input: '', expectedOutput: '', isHidden: false }]
+    });
+  };
+
+  const handleRemoveTestCase = (index) => {
+    setProblem({
+      ...problem,
+      testCases: problem.testCases.filter((_, i) => i !== index)
+    });
+  };
+
+  const handleTestCaseChange = (index, field, value) => {
+    const updatedTestCases = problem.testCases.map((testCase, i) => 
+      i === index ? { ...testCase, [field]: value } : testCase
+    );
+    setProblem({ ...problem, testCases: updatedTestCases });
+  };
+
+  const handleSave = () => {
+    if (!problem.title.trim() || !problem.description.trim()) {
+      alert('Title and description are required');
+      return;
+    }
+    
+    // Generate a temporary ID for the manual problem
+    const manualProblem = {
+      ...problem,
+      _id: `manual_${Date.now()}`,
+      isManual: true,
+      createdAt: new Date().toISOString()
+    };
+    
+    onSave(manualProblem);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-gray-700 flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-white">Create Manual Problem</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-white text-2xl">×</button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* Basic Information */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Problem Title *</label>
+              <input
+                type="text"
+                value={problem.title}
+                onChange={(e) => setProblem({...problem, title: e.target.value})}
+                className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
+                placeholder="Enter problem title"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Category</label>
+              <input
+                type="text"
+                value={problem.category}
+                onChange={(e) => setProblem({...problem, category: e.target.value})}
+                className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
+                placeholder="e.g., Arrays, Strings, Dynamic Programming"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Difficulty</label>
+              <select
+                value={problem.difficulty}
+                onChange={(e) => setProblem({...problem, difficulty: e.target.value})}
+                className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
+              >
+                <option value="Easy">Easy</option>
+                <option value="Medium">Medium</option>
+                <option value="Hard">Hard</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Points</label>
+              <input
+                type="number"
+                value={problem.points}
+                onChange={(e) => setProblem({...problem, points: parseInt(e.target.value) || 0})}
+                className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
+                min="1"
+                max="1000"
+              />
+            </div>
+          </div>
+
+          {/* Problem Description */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Problem Description *</label>
+            <textarea
+              value={problem.description}
+              onChange={(e) => setProblem({...problem, description: e.target.value})}
+              className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white h-32"
+              placeholder="Describe the problem statement..."
+              required
+            />
+          </div>
+
+          {/* Input/Output Format */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Input Format</label>
+              <textarea
+                value={problem.inputFormat}
+                onChange={(e) => setProblem({...problem, inputFormat: e.target.value})}
+                className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white h-24"
+                placeholder="Describe the input format..."
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Output Format</label>
+              <textarea
+                value={problem.outputFormat}
+                onChange={(e) => setProblem({...problem, outputFormat: e.target.value})}
+                className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white h-24"
+                placeholder="Describe the output format..."
+              />
+            </div>
+          </div>
+
+          {/* Constraints */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Constraints</label>
+            <textarea
+              value={problem.constraints}
+              onChange={(e) => setProblem({...problem, constraints: e.target.value})}
+              className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white h-20"
+              placeholder="e.g., 1 ≤ n ≤ 10^5, 1 ≤ arr[i] ≤ 10^9"
+            />
+          </div>
+
+          {/* Sample Input/Output */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Sample Input</label>
+              <textarea
+                value={problem.sampleInput}
+                onChange={(e) => setProblem({...problem, sampleInput: e.target.value})}
+                className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white h-24"
+                placeholder="Enter sample input..."
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Sample Output</label>
+              <textarea
+                value={problem.sampleOutput}
+                onChange={(e) => setProblem({...problem, sampleOutput: e.target.value})}
+                className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white h-24"
+                placeholder="Enter expected output..."
+              />
+            </div>
+          </div>
+
+          {/* Explanation */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Explanation (Optional)</label>
+            <textarea
+              value={problem.explanation}
+              onChange={(e) => setProblem({...problem, explanation: e.target.value})}
+              className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white h-24"
+              placeholder="Explain the sample case..."
+            />
+          </div>
+
+          {/* Test Cases */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <label className="block text-sm font-medium text-gray-300">Test Cases</label>
+              <button
+                type="button"
+                onClick={handleAddTestCase}
+                className="flex items-center space-x-1 bg-green-500/20 text-green-400 px-3 py-2 rounded-lg hover:bg-green-500/30 text-sm"
+              >
+                <HiPlus className="w-4 h-4" />
+                <span>Add Test Case</span>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {problem.testCases.map((testCase, index) => (
+                <div key={index} className="bg-gray-800/50 border border-gray-600 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-white font-medium">Test Case {index + 1}</h4>
+                    <div className="flex items-center space-x-3">
+                      <label className="flex items-center space-x-2 text-sm text-gray-300">
+                        <input
+                          type="checkbox"
+                          checked={testCase.isHidden}
+                          onChange={(e) => handleTestCaseChange(index, 'isHidden', e.target.checked)}
+                          className="w-4 h-4 text-purple-600"
+                        />
+                        <span>Hidden</span>
+                      </label>
+                      {problem.testCases.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveTestCase(index)}
+                          className="text-red-400 hover:text-red-300"
+                        >
+                          <HiX className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-1">Input</label>
+                      <textarea
+                        value={testCase.input}
+                        onChange={(e) => handleTestCaseChange(index, 'input', e.target.value)}
+                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm h-20"
+                        placeholder="Enter test input..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-1">Expected Output</label>
+                      <textarea
+                        value={testCase.expectedOutput}
+                        onChange={(e) => handleTestCaseChange(index, 'expectedOutput', e.target.value)}
+                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm h-20"
+                        placeholder="Enter expected output..."
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-gray-700 flex justify-end space-x-3">
+          <button
+            onClick={onClose}
+            className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-500"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className="px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:shadow-lg"
+          >
+            Save Problem
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // Modal Components
 const CreateContestModal = ({ 
@@ -14,6 +298,8 @@ const CreateContestModal = ({
   onClose 
 }) => {
   const [currentStep, setCurrentStep] = useState(1);
+  const [showManualProblemModal, setShowManualProblemModal] = useState(false);
+  const [manualProblems, setManualProblems] = useState([]);
   const totalSteps = 4;
 
   const handleNext = () => {
@@ -37,6 +323,28 @@ const CreateContestModal = ({
         selectedProblems: [...newContest.selectedProblems, problemId]
       });
     }
+  };
+
+  const handleManualProblemSave = (problem) => {
+    setManualProblems([...manualProblems, problem]);
+    setNewContest({
+      ...newContest,
+      selectedProblems: [...newContest.selectedProblems, problem._id]
+    });
+  };
+
+  const handleRemoveManualProblem = (problemId) => {
+    setManualProblems(manualProblems.filter(p => p._id !== problemId));
+    setNewContest({
+      ...newContest,
+      selectedProblems: newContest.selectedProblems.filter(id => id !== problemId)
+    });
+  };
+
+  // Custom submit handler that passes manual problems
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSubmit(e, manualProblems);
   };
 
   return (
@@ -66,7 +374,7 @@ const CreateContestModal = ({
           </div>
         </div>
 
-        <form onSubmit={onSubmit}>
+        <form onSubmit={handleSubmit}>
           <div className="p-6">
             {/* Step 1: Basic Information */}
             {currentStep === 1 && (
@@ -82,6 +390,7 @@ const CreateContestModal = ({
                       onChange={(e) => setNewContest({...newContest, title: e.target.value})}
                       className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
                       placeholder="Enter contest title"
+                      maxLength="200"
                       required
                     />
                   </div>
@@ -128,6 +437,7 @@ const CreateContestModal = ({
                     onChange={(e) => setNewContest({...newContest, description: e.target.value})}
                     className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white h-32"
                     placeholder="Describe the contest..."
+                    maxLength="1000"
                     required
                   />
                 </div>
@@ -146,48 +456,99 @@ const CreateContestModal = ({
               </div>
             )}
 
-            {/* Step 2: Select Problems */}
+            {/* Step 2: Select Problems - UPDATED */}
             {currentStep === 2 && (
               <div className="space-y-6">
-                <h3 className="text-xl font-semibold text-white mb-4">
-                  Select Problems ({newContest.selectedProblems.length} selected)
-                </h3>
-                
-                <div className="max-h-96 overflow-y-auto space-y-3">
-                  {problems.map((problem) => (
-                    <div 
-                      key={problem._id}
-                      className={`p-4 rounded-lg border cursor-pointer transition-all ${
-                        newContest.selectedProblems.includes(problem._id)
-                          ? 'bg-purple-500/20 border-purple-500'
-                          : 'bg-gray-800/50 border-gray-600 hover:border-gray-500'
-                      }`}
-                      onClick={() => handleProblemToggle(problem._id)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <h4 className="text-white font-semibold">{problem.title}</h4>
-                          <div className="flex items-center space-x-4 mt-2">
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${
-                              problem.difficulty === 'Easy' ? 'bg-green-500/20 text-green-400' :
-                              problem.difficulty === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' :
-                              'bg-red-500/20 text-red-400'
-                            }`}>
-                              {problem.difficulty}
-                            </span>
-                            <span className="text-gray-400 text-sm">{problem.category}</span>
-                            <span className="text-purple-400 text-sm">{problem.points} points</span>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-semibold text-white">
+                    Select Problems ({newContest.selectedProblems.length} selected)
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowManualProblemModal(true)}
+                    className="flex items-center space-x-2 bg-gradient-to-r from-blue-500 to-cyan-600 text-white px-4 py-2 rounded-lg hover:shadow-lg transition-all duration-300"
+                  >
+                    <HiPlus className="text-sm" />
+                    <span>Create Problem</span>
+                  </button>
+                </div>
+
+                {/* Manual Problems Section */}
+                {manualProblems.length > 0 && (
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                    <h4 className="text-white font-medium mb-3">Manual Problems ({manualProblems.length})</h4>
+                    <div className="space-y-3">
+                      {manualProblems.map((problem) => (
+                        <div key={problem._id} className="bg-blue-500/20 border border-blue-500 rounded-lg p-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <h5 className="text-white font-semibold">{problem.title}</h5>
+                              <div className="flex items-center space-x-4 mt-2">
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                  problem.difficulty === 'Easy' ? 'bg-green-500/20 text-green-400' :
+                                  problem.difficulty === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                                  'bg-red-500/20 text-red-400'
+                                }`}>
+                                  {problem.difficulty}
+                                </span>
+                                <span className="text-gray-400 text-sm">{problem.category}</span>
+                                <span className="text-purple-400 text-sm">{problem.points} points</span>
+                                <span className="text-blue-400 text-sm">Manual</span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveManualProblem(problem._id)}
+                              className="text-red-400 hover:text-red-300 ml-3"
+                            >
+                              <HiTrash className="w-4 h-4" />
+                            </button>
                           </div>
                         </div>
-                        <input
-                          type="checkbox"
-                          checked={newContest.selectedProblems.includes(problem._id)}
-                          onChange={() => handleProblemToggle(problem._id)}
-                          className="w-5 h-5 text-purple-600"
-                        />
-                      </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
+                )}
+                
+                {/* Existing Problems */}
+                <div>
+                  <h4 className="text-white font-medium mb-3">Existing Problems ({problems.length})</h4>
+                  <div className="max-h-96 overflow-y-auto space-y-3">
+                    {problems.map((problem) => (
+                      <div 
+                        key={problem._id}
+                        className={`p-4 rounded-lg border cursor-pointer transition-all ${
+                          newContest.selectedProblems.includes(problem._id)
+                            ? 'bg-purple-500/20 border-purple-500'
+                            : 'bg-gray-800/50 border-gray-600 hover:border-gray-500'
+                        }`}
+                        onClick={() => handleProblemToggle(problem._id)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <h4 className="text-white font-semibold">{problem.title}</h4>
+                            <div className="flex items-center space-x-4 mt-2">
+                              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                problem.difficulty === 'Easy' ? 'bg-green-500/20 text-green-400' :
+                                problem.difficulty === 'Medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                                'bg-red-500/20 text-red-400'
+                              }`}>
+                                {problem.difficulty}
+                              </span>
+                              <span className="text-gray-400 text-sm">{problem.category}</span>
+                              <span className="text-purple-400 text-sm">{problem.points} points</span>
+                            </div>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={newContest.selectedProblems.includes(problem._id)}
+                            onChange={() => handleProblemToggle(problem._id)}
+                            className="w-5 h-5 text-purple-600"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -205,7 +566,7 @@ const CreateContestModal = ({
                     <div>
                       <h4 className="text-white font-medium">Participant Registration</h4>
                       <p className="text-gray-300 text-sm">
-                        Participants will be registered after the contest is created. You can manage registrations from the contest management page.
+                        Configure how students can register for this contest. Registration is handled after contest creation.
                       </p>
                     </div>
                   </div>
@@ -228,94 +589,123 @@ const CreateContestModal = ({
                   </div>
                 </div>
 
+                {/* Filter Criteria */}
                 {newContest.participantSelection !== 'manual' && (
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Department</label>
-                      <select
-                        value={newContest.filterCriteria.department}
-                        onChange={(e) => setNewContest({
-                          ...newContest,
-                          filterCriteria: {...newContest.filterCriteria, department: e.target.value}
-                        })}
-                        className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
-                      >
-                        <option value="">All Departments</option>
-                        <option value="AIML">AIML</option>
-                        <option value="CSE">CSE</option>
-                        <option value="IT">IT</option>
-                        <option value="ECE">ECE</option>
-                        <option value="MECH">MECH</option>
-                        <option value="CIVIL">CIVIL</option>
-                      </select>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Semester</label>
-                      <select
-                        value={newContest.filterCriteria.semester || ''}
-                        onChange={(e) => setNewContest({
-                          ...newContest,
-                          filterCriteria: {...newContest.filterCriteria, semester: e.target.value ? parseInt(e.target.value) : null}
-                        })}
-                        className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
-                      >
-                        <option value="">All Semesters</option>
-                        {[1,2,3,4,5,6,7,8].map(sem => (
-                          <option key={sem} value={sem}>{sem}</option>
-                        ))}
-                      </select>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">Department</label>
+                        <select
+                          value={newContest.filterCriteria.department || ''}
+                          onChange={(e) => setNewContest({
+                            ...newContest,
+                            filterCriteria: {...newContest.filterCriteria, department: e.target.value}
+                          })}
+                          className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
+                        >
+                          <option value="">All Departments</option>
+                          <option value="AIML">AIML</option>
+                          <option value="CSE">CSE</option>
+                          <option value="IT">IT</option>
+                          <option value="ECE">ECE</option>
+                          <option value="MECH">MECH</option>
+                          <option value="CIVIL">CIVIL</option>
+                        </select>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">Semester</label>
+                        <select
+                          value={newContest.filterCriteria.semester || ''}
+                          onChange={(e) => setNewContest({
+                            ...newContest,
+                            filterCriteria: {...newContest.filterCriteria, semester: e.target.value ? parseInt(e.target.value) : null}
+                          })}
+                          className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
+                        >
+                          <option value="">All Semesters</option>
+                          {[1,2,3,4,5,6,7,8].map(sem => (
+                            <option key={sem} value={sem}>{sem}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">Division</label>
+                        <select
+                          value={newContest.filterCriteria.division || ''}
+                          onChange={(e) => setNewContest({
+                            ...newContest,
+                            filterCriteria: {...newContest.filterCriteria, division: e.target.value ? parseInt(e.target.value) : null}
+                          })}
+                          className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
+                        >
+                          <option value="">All Divisions</option>
+                          {[1,2,3,4].map(div => (
+                            <option key={div} value={div}>{div}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">Batch</label>
+                        <select
+                          value={newContest.filterCriteria.batch || ''}
+                          onChange={(e) => setNewContest({
+                            ...newContest,
+                            filterCriteria: {...newContest.filterCriteria, batch: e.target.value}
+                          })}
+                          className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
+                        >
+                          <option value="">All Batches</option>
+                          <option value="A1">A1</option>
+                          <option value="B1">B1</option>
+                          <option value="C1">C1</option>
+                          <option value="D1">D1</option>
+                          <option value="A2">A2</option>
+                          <option value="B2">B2</option>
+                          <option value="C2">C2</option>
+                          <option value="D2">D2</option>
+                          <option value="A3">A3</option>
+                          <option value="B3">B3</option>
+                          <option value="C3">C3</option>
+                          <option value="D3">D3</option>
+                          <option value="A4">A4</option>
+                          <option value="B4">B4</option>
+                          <option value="C4">C4</option>
+                          <option value="D4">D4</option>
+                        </select>
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Division</label>
-                      <select
-                        value={newContest.filterCriteria.division || ''}
-                        onChange={(e) => setNewContest({
-                          ...newContest,
-                          filterCriteria: {...newContest.filterCriteria, division: e.target.value ? parseInt(e.target.value) : null}
-                        })}
-                        className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
-                      >
-                        <option value="">All Divisions</option>
-                        {[1,2,3,4].map(div => (
-                          <option key={div} value={div}>{div}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Batch</label>
-                      <select
-                        value={newContest.filterCriteria.batch}
-                        onChange={(e) => setNewContest({
-                          ...newContest,
-                          filterCriteria: {...newContest.filterCriteria, batch: e.target.value}
-                        })}
-                        className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
-                      >
-                        <option value="">All Batches</option>
-                        <option value="A1">A1</option>
-                        <option value="B1">B1</option>
-                        <option value="C1">C1</option>
-                        <option value="D1">D1</option>
-                        <option value="A2">A2</option>
-                        <option value="B2">B2</option>
-                        <option value="C2">C2</option>
-                        <option value="D2">D2</option>
-                        <option value="A3">A3</option>
-                        <option value="B3">B3</option>
-                        <option value="C3">C3</option>
-                        <option value="D3">D3</option>
-                        <option value="A4">A4</option>
-                        <option value="B4">B4</option>
-                        <option value="C4">C4</option>
-                        <option value="D4">D4</option>
-                      </select>
+                    {/* Student ID Filter Only */}
+                    <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
+                      <h4 className="text-white font-medium mb-3">Student Number Filter</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">Student ID Filter</label>
+                          <select
+                            value={newContest.filterCriteria.studentIdFilter || ''}
+                            onChange={(e) => setNewContest({
+                              ...newContest,
+                              filterCriteria: {...newContest.filterCriteria, studentIdFilter: e.target.value}
+                            })}
+                            className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white"
+                          >
+                            <option value="">All Students</option>
+                            <option value="even">Even Student IDs Only</option>
+                            <option value="odd">Odd Student IDs Only</option>
+                          </select>
+                        </div>
+                      </div>
+                      <p className="text-gray-400 text-xs mt-2">
+                        Filter students based on their student ID ending digit (even/odd)
+                      </p>
                     </div>
                   </div>
                 )}
 
+                {/* Registration Summary */}
                 <div className="bg-gray-800/50 border border-gray-600 rounded-lg p-4">
                   <h4 className="text-white font-medium mb-2">Registration Summary</h4>
                   <p className="text-gray-300 text-sm">
@@ -323,6 +713,12 @@ const CreateContestModal = ({
                   </p>
                   <p className="text-gray-300 text-sm">
                     Max Participants: <span className="text-purple-400 font-medium">{newContest.maxParticipants}</span>
+                  </p>
+                  <p className="text-gray-300 text-sm">
+                    Eligible Students: <span className="text-green-400 font-medium">{getFilteredStudents().length}</span>
+                  </p>
+                  <p className="text-gray-300 text-sm">
+                    Manual Problems: <span className="text-cyan-400 font-medium">{manualProblems.length}</span>
                   </p>
                   {newContest.participantSelection !== 'manual' && (
                     <div className="mt-2 text-xs text-gray-400">
@@ -332,6 +728,7 @@ const CreateContestModal = ({
                         {newContest.filterCriteria.semester && <li>Semester: {newContest.filterCriteria.semester}</li>}
                         {newContest.filterCriteria.division && <li>Division: {newContest.filterCriteria.division}</li>}
                         {newContest.filterCriteria.batch && <li>Batch: {newContest.filterCriteria.batch}</li>}
+                        {newContest.filterCriteria.studentIdFilter && <li>Student IDs: {newContest.filterCriteria.studentIdFilter}</li>}
                       </ul>
                     </div>
                   )}
@@ -393,6 +790,56 @@ const CreateContestModal = ({
                     />
                   </div>
 
+                  <div className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg">
+                    <div>
+                      <h4 className="text-white font-medium">Allow View Problems Before Start</h4>
+                      <p className="text-gray-400 text-sm">Let participants see problems before contest begins</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={newContest.settings.allowViewProblemsBeforeStart}
+                      onChange={(e) => setNewContest({
+                        ...newContest,
+                        settings: {...newContest.settings, allowViewProblemsBeforeStart: e.target.checked}
+                      })}
+                      className="w-5 h-5 text-purple-600"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg">
+                    <div>
+                      <h4 className="text-white font-medium">Freeze Leaderboard</h4>
+                      <p className="text-gray-400 text-sm">Hide leaderboard updates near contest end</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={newContest.settings.freezeLeaderboard}
+                      onChange={(e) => setNewContest({
+                        ...newContest,
+                        settings: {...newContest.settings, freezeLeaderboard: e.target.checked}
+                      })}
+                      className="w-5 h-5 text-purple-600"
+                    />
+                  </div>
+
+                  {newContest.settings.freezeLeaderboard && (
+                    <div className="p-4 bg-gray-800/50 rounded-lg">
+                      <label className="block text-white font-medium mb-2">Freeze Time (minutes before end)</label>
+                      <input
+                        type="number"
+                        value={newContest.settings.freezeTime}
+                        onChange={(e) => setNewContest({
+                          ...newContest,
+                          settings: {...newContest.settings, freezeTime: parseInt(e.target.value) || 60}
+                        })}
+                        className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white"
+                        min="1"
+                        max="300"
+                        placeholder="60"
+                      />
+                    </div>
+                  )}
+
                   <div className="p-4 bg-gray-800/50 rounded-lg">
                     <label className="block text-white font-medium mb-2">Penalty per Wrong Submission</label>
                     <input
@@ -415,6 +862,7 @@ const CreateContestModal = ({
                       onChange={(e) => setNewContest({...newContest, rules: e.target.value})}
                       className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white h-32"
                       placeholder="Enter contest rules and guidelines..."
+                      maxLength="2000"
                     />
                   </div>
                 </div>
@@ -462,9 +910,19 @@ const CreateContestModal = ({
           </div>
         </form>
       </div>
+
+      {/* Manual Problem Modal */}
+      {showManualProblemModal && (
+        <ManualProblemModal
+          onClose={() => setShowManualProblemModal(false)}
+          onSave={handleManualProblemSave}
+        />
+      )}
     </div>
   );
 };
+
+// Keep the rest of your component (ParticipantsModal, LeaderboardModal, etc.) exactly as they are...
 
 const ParticipantsModal = ({ contest, onClose }) => {
   return (
@@ -497,6 +955,11 @@ const ParticipantsModal = ({ contest, onClose }) => {
                   {contest.participantSelection === 'manual' ? 'Manual' : 'Automatic'}
                 </span>
               </span>
+              <span className="text-white">
+                Active: <span className="text-yellow-400 font-semibold">
+                  {contest.activeParticipantsCount || 0}
+                </span>
+              </span>
             </div>
           </div>
 
@@ -511,7 +974,7 @@ const ParticipantsModal = ({ contest, onClose }) => {
           ) : (
             <div className="space-y-3">
               {contest.participants.map((participant, index) => (
-                <div key={participant._id || index} className="bg-gray-800/50 border border-gray-600 rounded-lg p-4">
+                <div key={participant._id || participant.userId || index} className="bg-gray-800/50 border border-gray-600 rounded-lg p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4">
                       <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-600 rounded-full flex items-center justify-center">
@@ -522,20 +985,48 @@ const ParticipantsModal = ({ contest, onClose }) => {
                       <div>
                         <h4 className="text-white font-medium">{participant.name || 'Unknown User'}</h4>
                         <p className="text-gray-400 text-sm">
-                          {participant.email} • {participant.department} • Semester {participant.semester}
+                          {participant.email} • {participant.department} • Sem {participant.semester} • Div {participant.division} • {participant.batch}
                         </p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-gray-400 text-sm">Registered</p>
-                      <p className="text-green-400 text-sm">
-                        {participant.registrationTime ? 
-                          new Date(participant.registrationTime).toLocaleDateString() : 
-                          'Date unknown'
-                        }
-                      </p>
+                      <div className="flex items-center space-x-4">
+                        <div>
+                          <p className="text-purple-400 font-semibold text-lg">{participant.score || 0}</p>
+                          <p className="text-gray-400 text-xs">Score</p>
+                        </div>
+                        <div>
+                          <p className="text-blue-400 font-semibold">{participant.submissions || 0}</p>
+                          <p className="text-gray-400 text-xs">Submissions</p>
+                        </div>
+                        <div>
+                          <p className="text-green-400 text-sm">
+                            {participant.registrationTime ? 
+                              new Date(participant.registrationTime).toLocaleDateString() : 
+                              'Date unknown'
+                            }
+                          </p>
+                          <p className="text-gray-400 text-xs">Registered</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
+                  
+                  {/* Show problems attempted */}
+                  {participant.problemsAttempted && participant.problemsAttempted.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-700">
+                      <p className="text-gray-400 text-sm mb-2">Problems Attempted:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {participant.problemsAttempted.map((problem, idx) => (
+                          <span key={idx} className={`px-2 py-1 rounded text-xs font-medium ${
+                            problem.solved ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                          }`}>
+                            Problem {idx + 1} ({problem.attempts} attempts) - {problem.score} pts
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -556,16 +1047,24 @@ const ParticipantsModal = ({ contest, onClose }) => {
 };
 
 const LeaderboardModal = ({ contest, onClose }) => {
-  // Mock leaderboard data - replace with actual API call
-  const mockLeaderboard = contest.participants?.map((participant, index) => ({
-    rank: index + 1,
-    name: participant.name || 'Unknown User',
-    email: participant.email,
-    score: participant.score || Math.floor(Math.random() * 300) + 50,
-    solvedProblems: Math.floor(Math.random() * (contest.problems?.length || 3)) + 1,
-    totalProblems: contest.problems?.length || 3,
-    submissionTime: new Date(Date.now() - Math.random() * 3600000).toLocaleTimeString()
-  })).sort((a, b) => b.score - a.score).map((item, index) => ({...item, rank: index + 1})) || [];
+  // Use the contest's built-in leaderboard method or create mock data
+  const leaderboard = contest.getLeaderboard ? contest.getLeaderboard() : 
+    contest.participants?.map((participant, index) => ({
+      rank: index + 1,
+      name: participant.name || 'Unknown User',
+      email: participant.email,
+      score: participant.score || 0,
+      submissions: participant.submissions || 0,
+      solvedProblems: participant.problemsAttempted?.filter(p => p.solved).length || 0,
+      totalProblems: contest.problems?.length || 0,
+      lastActivityTime: participant.lastActivityTime ? 
+        new Date(participant.lastActivityTime).toLocaleTimeString() : 
+        'No activity'
+    })).sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      if (a.submissions !== b.submissions) return a.submissions - b.submissions;
+      return new Date(a.lastActivityTime) - new Date(b.lastActivityTime);
+    }).map((item, index) => ({...item, rank: index + 1})) || [];
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -574,6 +1073,17 @@ const LeaderboardModal = ({ contest, onClose }) => {
           <div>
             <h2 className="text-2xl font-bold text-white">Contest Leaderboard</h2>
             <p className="text-gray-400">{contest.title}</p>
+            <div className="flex items-center space-x-4 mt-2 text-sm">
+              <span className="text-gray-400">
+                Total Points: <span className="text-purple-400 font-semibold">{contest.totalPoints || 0}</span>
+              </span>
+              <span className="text-gray-400">
+                Success Rate: <span className="text-green-400 font-semibold">{contest.successRate || 0}%</span>
+              </span>
+              <span className="text-gray-400">
+                Avg Score: <span className="text-blue-400 font-semibold">{contest.analytics?.averageScore?.toFixed(1) || 0}</span>
+              </span>
+            </div>
           </div>
           <button 
             onClick={onClose}
@@ -584,7 +1094,7 @@ const LeaderboardModal = ({ contest, onClose }) => {
         </div>
 
         <div className="p-6">
-          {mockLeaderboard.length === 0 ? (
+          {leaderboard.length === 0 ? (
             <div className="text-center py-12">
               <div className="w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
                 <HiChartBar className="text-3xl text-gray-400" />
@@ -601,11 +1111,12 @@ const LeaderboardModal = ({ contest, onClose }) => {
                     <th className="text-left py-3 px-4 text-gray-300 font-semibold">Participant</th>
                     <th className="text-center py-3 px-4 text-gray-300 font-semibold">Score</th>
                     <th className="text-center py-3 px-4 text-gray-300 font-semibold">Solved</th>
-                    <th className="text-center py-3 px-4 text-gray-300 font-semibold">Last Submission</th>
+                    <th className="text-center py-3 px-4 text-gray-300 font-semibold">Submissions</th>
+                    <th className="text-center py-3 px-4 text-gray-300 font-semibold">Last Activity</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {mockLeaderboard.map((participant) => (
+                  {leaderboard.map((participant) => (
                     <tr key={participant.email} className="border-b border-gray-800 hover:bg-gray-800/30">
                       <td className="py-4 px-4">
                         <div className="flex items-center space-x-3">
@@ -639,7 +1150,10 @@ const LeaderboardModal = ({ contest, onClose }) => {
                         </span>
                       </td>
                       <td className="py-4 px-4 text-center">
-                        <span className="text-gray-400 text-sm">{participant.submissionTime}</span>
+                        <span className="text-blue-400 font-semibold">{participant.submissions}</span>
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        <span className="text-gray-400 text-sm">{participant.lastActivityTime}</span>
                       </td>
                     </tr>
                   ))}
@@ -679,7 +1193,7 @@ const Contest = ({ onBack }) => {
         dateRange: 'All'
     });
 
-    // Updated new contest form state to match backend schema
+    // Updated new contest form state - REMOVED roll number filter
     const [newContest, setNewContest] = useState({
         title: '',
         description: '',
@@ -694,7 +1208,8 @@ const Contest = ({ onBack }) => {
             department: '',
             semester: null,
             division: null,
-            batch: ''
+            batch: '',
+            studentIdFilter: '' // Only student ID filter remains
         },
         settings: {
             allowLateSubmission: false,
@@ -744,7 +1259,8 @@ const Contest = ({ onBack }) => {
                         department: user.department,
                         semester: user.semester || 1,
                         division: user.division || 1,
-                        batch: user.batch || 'A1'
+                        batch: user.batch || 'A1',
+                        studentId: user.studentId || user._id // Use studentId or fallback to _id
                     }));
                     setStudents(transformedUsers);
                 }
@@ -765,6 +1281,48 @@ const Contest = ({ onBack }) => {
             case 'Hard': return 300;
             default: return 100;
         }
+    };
+
+    // Helper function to extract numeric value from string
+    const extractNumericValue = (value) => {
+        if (typeof value === 'number') return value;
+        if (typeof value === 'string') {
+            const match = value.match(/\d+/);
+            return match ? parseInt(match[0]) : 0;
+        }
+        return 0;
+    };
+
+    // Helper function to check if number is even/odd
+    const isEvenNumber = (value) => {
+        const num = extractNumericValue(value);
+        return num % 2 === 0;
+    };
+
+    // Updated filter function - REMOVED roll number filtering
+    const getFilteredStudents = () => {
+        if (newContest.participantSelection === 'manual') return students;
+        
+        return students.filter(student => {
+            const { department, semester, division, batch, studentIdFilter } = newContest.filterCriteria;
+            
+            // Basic filters
+            const basicMatch = (!department || student.department === department) &&
+                              (!semester || student.semester === semester) &&
+                              (!division || student.division === division) &&
+                              (!batch || student.batch === batch);
+            
+            if (!basicMatch) return false;
+            
+            // Student ID filter only
+            if (studentIdFilter) {
+                const idIsEven = isEvenNumber(student.studentId);
+                if (studentIdFilter === 'even' && !idIsEven) return false;
+                if (studentIdFilter === 'odd' && idIsEven) return false;
+            }
+            
+            return true;
+        });
     };
 
     // Utility functions
@@ -791,12 +1349,16 @@ const Contest = ({ onBack }) => {
         return new Date(dateString).toLocaleString();
     };
 
-    // Contest management functions - UPDATED
-    const handleCreateContest = async (e) => {
+    // Contest management functions - FIXED to handle manual problems properly
+    const handleCreateContest = async (e, manualProblems = []) => {
         e.preventDefault();
         setLoading(true);
         
         try {
+            console.log('🎯 Starting contest creation...');
+            console.log('📝 Manual problems received:', manualProblems.length);
+            console.log('🔧 Selected problems:', newContest.selectedProblems);
+
             // Validate required fields first
             if (!newContest.title.trim()) {
                 throw new Error('Contest title is required');
@@ -826,14 +1388,26 @@ const Contest = ({ onBack }) => {
                 throw new Error('At least one problem must be selected');
             }
 
+            // Create a combined problems array for lookup
+            const combinedProblems = [...problems, ...manualProblems];
+            console.log('🔍 Combined problems for lookup:', combinedProblems.length);
+
             // Prepare problems data for backend - match ContestProblemSchema exactly
             const selectedProblemsData = newContest.selectedProblems.map((problemId, index) => {
-                const problem = problems.find(p => p._id === problemId);
+                console.log(`🔍 Processing problem ID: ${problemId}`);
+                
+                const problem = combinedProblems.find(p => p._id === problemId);
                 if (!problem) {
+                    console.error(`❌ Problem not found: ${problemId}`);
+                    console.error('Available problems:', combinedProblems.map(p => ({ id: p._id, title: p.title })));
                     throw new Error(`Problem with ID ${problemId} not found`);
                 }
-                return {
-                    problemId: problem._id,
+                
+                console.log(`✅ Found problem: ${problem.title} (Manual: ${!!problem.isManual})`);
+                
+                // Create base problem data
+                const problemData = {
+                    problemId: problem._id, // This will be a string for manual problems
                     title: problem.title,
                     difficulty: problem.difficulty,
                     category: problem.category || 'General',
@@ -842,22 +1416,44 @@ const Contest = ({ onBack }) => {
                     solvedCount: 0,
                     attemptCount: 0
                 };
+
+                // If it's a manual problem, include the full problem details
+                if (problem.isManual) {
+                    console.log(`📝 Adding manual problem data for: ${problem.title}`);
+                    problemData.manualProblem = {
+                        description: problem.description,
+                        inputFormat: problem.inputFormat,
+                        outputFormat: problem.outputFormat,
+                        constraints: problem.constraints,
+                        sampleInput: problem.sampleInput,
+                        sampleOutput: problem.sampleOutput,
+                        explanation: problem.explanation,
+                        testCases: problem.testCases || []
+                    };
+                }
+
+                return problemData;
             });
+
+            console.log('📊 Problems data prepared:', selectedProblemsData.length);
+            console.log('📝 Manual problems in data:', selectedProblemsData.filter(p => p.manualProblem).length);
 
             // Prepare filter criteria - ensure it matches FilterCriteriaSchema
-            const filterCriteria = {
-                department: newContest.filterCriteria.department || '',
-                semester: newContest.filterCriteria.semester || undefined,
-                division: newContest.filterCriteria.division || undefined,
-                batch: newContest.filterCriteria.batch || ''
-            };
-
-            // Remove undefined values to avoid validation issues
-            Object.keys(filterCriteria).forEach(key => {
-                if (filterCriteria[key] === undefined) {
-                    delete filterCriteria[key];
-                }
-            });
+            const filterCriteria = {};
+            
+            // Only add non-empty values to avoid validation issues
+            if (newContest.filterCriteria.department) {
+                filterCriteria.department = newContest.filterCriteria.department;
+            }
+            if (newContest.filterCriteria.semester) {
+                filterCriteria.semester = newContest.filterCriteria.semester;
+            }
+            if (newContest.filterCriteria.division) {
+                filterCriteria.division = newContest.filterCriteria.division;
+            }
+            if (newContest.filterCriteria.batch) {
+                filterCriteria.batch = newContest.filterCriteria.batch;
+            }
 
             // Prepare settings - ensure all boolean values are proper
             const settings = {
@@ -884,14 +1480,18 @@ const Contest = ({ onBack }) => {
                 participantSelection: newContest.participantSelection || 'manual',
                 filterCriteria: filterCriteria,
                 settings: settings
-                // Don't send participants array during creation - let backend handle it
             };
 
-            console.log('📤 Sending contest data:', JSON.stringify(contestData, null, 2));
+            console.log('📤 Sending contest data to backend:');
+            console.log('- Title:', contestData.title);
+            console.log('- Problems count:', contestData.problems.length);
+            console.log('- Manual problems count:', contestData.problems.filter(p => p.manualProblem).length);
+            console.log('- Problem IDs:', contestData.problems.map(p => p.problemId));
 
             const response = await contestAPI.createContest(contestData);
             
             if (response.success) {
+                console.log('✅ Contest created successfully!');
                 alert('Contest created successfully!');
                 resetNewContestForm();
                 setShowCreateModal(false);
@@ -924,7 +1524,8 @@ const Contest = ({ onBack }) => {
                 department: '',
                 semester: null,
                 division: null,
-                batch: ''
+                batch: '',
+                studentIdFilter: ''
             },
             settings: {
                 allowLateSubmission: false,
@@ -985,19 +1586,6 @@ const Contest = ({ onBack }) => {
         }
     };
 
-    // Filter function
-    const getFilteredStudents = () => {
-        if (newContest.participantSelection === 'manual') return students;
-        
-        return students.filter(student => {
-            const { department, semester, division, batch } = newContest.filterCriteria;
-            return (!department || student.department === department) &&
-                   (!semester || student.semester === semester) &&
-                   (!division || student.division === division) &&
-                   (!batch || student.batch === batch);
-        });
-    };
-
     const filteredContests = contests.filter(contest => {
         return (filters.status === 'All' || contest.status === filters.status) &&
                (filters.department === 'All' || contest.participants?.some(p => p.department === filters.department));
@@ -1043,7 +1631,7 @@ const Contest = ({ onBack }) => {
                         <HiStar className="text-3xl text-white" />
                     </div>
                     <h1 className="text-5xl font-bold text-white mb-4">Contest Management Hub</h1>
-                    <p className="text-gray-300 text-xl">Create, manage, and monitor programming contests</p>
+                    <p className="text-gray-300 text-xl">Create, manage, and monitor programming contests with manual problem creation</p>
                 </div>
 
                 {/* Navigation Tabs */}
@@ -1222,11 +1810,21 @@ const Contest = ({ onBack }) => {
                                                         <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(contest.status)}`}>
                                                             {contest.status}
                                                         </span>
+                                                        {contest.settings?.freezeLeaderboard && (
+                                                            <span className="px-2 py-1 rounded text-xs font-medium bg-blue-500/20 text-blue-400">
+                                                                Frozen Board
+                                                            </span>
+                                                        )}
+                                                        {contest.problems?.some(p => p.manualProblem) && (
+                                                            <span className="px-2 py-1 rounded text-xs font-medium bg-cyan-500/20 text-cyan-400">
+                                                                Manual Problems
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     
                                                     <p className="text-gray-300 mb-4 max-w-2xl">{contest.description}</p>
                                                     
-                                                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
+                                                    <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-4">
                                                         <div className="flex items-center space-x-2 text-sm text-gray-400">
                                                             <HiCalendar className="w-4 h-4" />
                                                             <span>{formatDate(contest.startDate)}</span>
@@ -1247,14 +1845,24 @@ const Contest = ({ onBack }) => {
                                                             <HiChartBar className="w-4 h-4" />
                                                             <span>{contest.analytics?.totalSubmissions || 0} submissions</span>
                                                         </div>
+                                                        <div className="flex items-center space-x-2 text-sm text-gray-400">
+                                                            <span>🎯</span>
+                                                            <span>{contest.totalPoints || 0} pts total</span>
+                                                        </div>
                                                     </div>
 
                                                     <div className="flex flex-wrap gap-2">
-                                                        {contest.problems?.map((problem, index) => (
+                                                        {contest.problems?.slice(0, 3).map((problem, index) => (
                                                             <span key={index} className={`px-2 py-1 rounded text-xs font-medium ${getDifficultyColor(problem.difficulty)}`}>
                                                                 {problem.title} ({problem.points}pts)
+                                                                {problem.manualProblem && <span className="ml-1 text-cyan-400">📝</span>}
                                                             </span>
                                                         ))}
+                                                        {contest.problems?.length > 3 && (
+                                                            <span className="px-2 py-1 rounded text-xs font-medium bg-gray-500/20 text-gray-400">
+                                                                +{contest.problems.length - 3} more
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                                 
@@ -1359,6 +1967,9 @@ const Contest = ({ onBack }) => {
                                                             Avg Score: {contest.analytics?.averageScore?.toFixed(1) || 0}
                                                         </span>
                                                         <span className="text-gray-400">
+                                                            Success Rate: {contest.successRate || 0}%
+                                                        </span>
+                                                        <span className="text-gray-400">
                                                             Ends: {formatDate(contest.endDate)}
                                                         </span>
                                                     </div>
@@ -1410,6 +2021,12 @@ const Contest = ({ onBack }) => {
                                                         </span>
                                                         <span className="text-gray-400">
                                                             {contest.analytics?.totalSubmissions || 0} submissions
+                                                        </span>
+                                                        <span className="text-gray-400">
+                                                            Success Rate: {contest.successRate || 0}%
+                                                        </span>
+                                                        <span className="text-gray-400">
+                                                            Total Points: {contest.totalPoints || 0}
                                                         </span>
                                                         <span className="text-gray-400">
                                                             Ended: {formatDate(contest.endDate)}
