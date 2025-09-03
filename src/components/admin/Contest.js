@@ -1441,7 +1441,7 @@ const Contest = ({ onBack }) => {
             // Prepare filter criteria - ensure it matches FilterCriteriaSchema
             const filterCriteria = {};
             
-            // Only add non-empty values to avoid validation issues
+            
             if (newContest.filterCriteria.department) {
                 filterCriteria.department = newContest.filterCriteria.department;
             }
