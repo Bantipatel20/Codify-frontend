@@ -1,8 +1,7 @@
 // src/components/client/Submissions.js
 import React, { useState, useEffect } from 'react';
-import { HiDocumentText, HiFilter, HiCheckCircle, HiXCircle, HiClock, HiEye, HiRefresh, HiExclamation } from 'react-icons/hi';
-import { authAPI } from '../../services/api';
-import api from '../../services/api'; // Import the configured axios instance
+import { HiDocumentText, HiFilter, HiCheckCircle, HiXCircle, HiClock, HiEye, HiRefresh, HiExclamation, HiCode, HiX } from 'react-icons/hi';
+import { authAPI, submissionsAPI } from '../../services/api';
 
 const Submissions = () => {
   const [submissions, setSubmissions] = useState([]);
@@ -12,6 +11,11 @@ const Submissions = () => {
   const [statusFilter, setStatusFilter] = useState('All');
   const [languageFilter, setLanguageFilter] = useState('All');
   const [userProfile, setUserProfile] = useState(null);
+
+  // Modal state for viewing code
+  const [selectedSubmission, setSelectedSubmission] = useState(null);
+  const [showCodeModal, setShowCodeModal] = useState(false);
+  const [loadingCode, setLoadingCode] = useState(false);
 
   // Fetch user submissions
   const fetchSubmissions = async () => {
@@ -26,16 +30,24 @@ const Submissions = () => {
       
       setUserProfile(currentUser);
       
-      // Use the configured API instance instead of raw axios
-      const response = await api.get(`/api/submissions/user/${currentUser._id}`);
+      console.log('🔄 Fetching submissions for user:', currentUser._id);
       
-      if (response.data.success) {
-        setSubmissions(response.data.data || []);
+      // Use the submissionsAPI instead of direct API call
+      const response = await submissionsAPI.getUserSubmissions(currentUser._id, {
+        page: 1,
+        limit: 100
+      });
+      
+      console.log('📊 User submissions response:', response);
+      
+      if (response.success) {
+        setSubmissions(response.data || []);
+        console.log(`✅ Loaded ${response.data?.length || 0} user submissions`);
       } else {
-        throw new Error(response.data.error || 'Failed to fetch submissions');
+        throw new Error(response.error || 'Failed to fetch submissions');
       }
     } catch (err) {
-      console.error('Error fetching submissions:', err);
+      console.error('❌ Error fetching submissions:', err);
       if (err.response?.status === 404) {
         setError('Submissions API endpoint not found. Please ensure the backend server is running with the correct routes.');
       } else if (err.response?.status === 401) {
@@ -47,6 +59,47 @@ const Submissions = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Function to fetch detailed submission with code
+  const fetchSubmissionDetails = async (submissionId) => {
+    try {
+      setLoadingCode(true);
+      console.log('🔄 Fetching submission details for:', submissionId);
+      
+      const response = await submissionsAPI.getSubmissionById(submissionId);
+      
+      if (response.success) {
+        setSelectedSubmission(response.data);
+        setShowCodeModal(true);
+        console.log('✅ Loaded submission details');
+      } else {
+        setError('Failed to load submission details');
+      }
+    } catch (err) {
+      console.error('❌ Error fetching submission details:', err);
+      setError('Failed to load submission details');
+    } finally {
+      setLoadingCode(false);
+    }
+  };
+
+  // Function to handle view code button click
+  const handleViewCode = (submission) => {
+    // If the submission already has code data, show it directly
+    if (submission.code) {
+      setSelectedSubmission(submission);
+      setShowCodeModal(true);
+    } else {
+      // Otherwise fetch the full submission details
+      fetchSubmissionDetails(submission._id);
+    }
+  };
+
+  // Function to close code modal
+  const closeCodeModal = () => {
+    setShowCodeModal(false);
+    setSelectedSubmission(null);
   };
 
   // Filter submissions based on status and language
@@ -213,6 +266,11 @@ const Submissions = () => {
           </div>
           <h1 className="text-5xl font-bold text-white mb-4">My Submissions</h1>
           <p className="text-gray-300 text-xl">Track your coding journey and progress</p>
+          {userProfile && (
+            <p className="text-gray-400 text-sm mt-2">
+              Welcome back, {userProfile.username}!
+            </p>
+          )}
         </div>
 
         {submissions.length === 0 ? (
@@ -262,7 +320,7 @@ const Submissions = () => {
                   <div>
                     <p className="text-gray-400 text-sm mb-1">Success Rate</p>
                     <p className="text-2xl font-bold text-yellow-400">
-                      {Math.round((submissions.filter(s => s.status === 'accepted').length / submissions.length) * 100)}%
+                      {submissions.length > 0 ? Math.round((submissions.filter(s => s.status === 'accepted').length / submissions.length) * 100) : 0}%
                     </p>
                   </div>
                   <div className="text-yellow-400 text-2xl">📊</div>
@@ -274,7 +332,7 @@ const Submissions = () => {
                   <div>
                     <p className="text-gray-400 text-sm mb-1">Avg Score</p>
                     <p className="text-2xl font-bold text-purple-400">
-                      {Math.round(submissions.reduce((acc, s) => acc + (s.score || 0), 0) / submissions.length)}
+                      {submissions.length > 0 ? Math.round(submissions.reduce((acc, s) => acc + (s.score || 0), 0) / submissions.length) : 0}
                     </p>
                   </div>
                   <div className="text-purple-400 text-2xl">⭐</div>
@@ -331,6 +389,7 @@ const Submissions = () => {
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Problem</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Status</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Score</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Test Cases</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Language</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Submitted</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Actions</th>
@@ -354,18 +413,26 @@ const Submissions = () => {
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center space-x-2">
-                              <span className={`text-lg font-bold ${(submission.score || 0) > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                {submission.score || 0}
+                              <span className={`text-lg font-bold ${(submission.score || 0) >= 70 ? 'text-green-400' : (submission.score || 0) >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                {submission.score || 0}%
                               </span>
                               {(submission.score || 0) > 0 && (
                                 <div className="w-12 bg-gray-700 rounded-full h-2">
                                   <div 
-                                    className="bg-green-500 h-2 rounded-full"
+                                    className={`h-2 rounded-full ${
+                                      (submission.score || 0) >= 70 ? 'bg-green-500' : 
+                                      (submission.score || 0) >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                                    }`}
                                     style={{ width: `${submission.score || 0}%` }}
                                   ></div>
                                 </div>
                               )}
                             </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="text-gray-300">
+                              {submission.passedTestCases || 0}/{submission.totalTestCases || 0}
+                            </span>
                           </td>
                           <td className="px-6 py-4">
                             <span className="text-gray-300 bg-gray-700 px-2 py-1 rounded text-sm">
@@ -379,9 +446,17 @@ const Submissions = () => {
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            <button className="flex items-center space-x-1 bg-blue-500/20 text-blue-400 px-3 py-2 rounded-lg hover:bg-blue-500/30 transition-all duration-300">
-                              <HiEye className="w-4 h-4" />
-                              <span className="text-sm">View</span>
+                            <button 
+                              onClick={() => handleViewCode(submission)}
+                              disabled={loadingCode}
+                              className="flex items-center space-x-2 px-3 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 
+                                       border border-indigo-500/30 text-indigo-400 rounded-lg transition-all duration-300 
+                                       hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <HiCode className="w-4 h-4" />
+                              <span className="text-sm font-medium">
+                                {loadingCode ? 'Loading...' : 'View Code'}
+                              </span>
                             </button>
                           </td>
                         </tr>
@@ -404,6 +479,105 @@ const Submissions = () => {
               </div>
             )}
           </>
+        )}
+
+        {/* Code Modal */}
+        {showCodeModal && selectedSubmission && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-700">
+                <div className="flex items-center space-x-4">
+                  <div className="w-10 h-10 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
+                    <HiCode className="text-white text-lg" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">
+                      My Submission Code
+                    </h3>
+                    <div className="flex items-center space-x-4 text-sm text-gray-400 mt-1">
+                      <span>Problem: {getProblemTitle(selectedSubmission.problemId)}</span>
+                      <span>•</span>
+                      <span>Language: {formatLanguage(selectedSubmission.language)}</span>
+                      <span>•</span>
+                      <span className={`${(selectedSubmission.score || 0) >= 70 ? 'text-green-400' : (selectedSubmission.score || 0) >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                        Score: {selectedSubmission.score || 0}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={closeCodeModal}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <HiX className="text-xl" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 max-h-[70vh] overflow-auto">
+                <div className="bg-gray-800 rounded-lg overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-2 bg-gray-700 border-b border-gray-600">
+                    <span className="text-sm font-medium text-gray-300">
+                      {formatLanguage(selectedSubmission.language)} Code
+                    </span>
+                    <div className={`inline-flex items-center space-x-2 px-3 py-1 rounded-full border ${getStatusColor(selectedSubmission.status)}`}>
+                      {getStatusIcon(selectedSubmission.status)}
+                      <span className="text-xs font-medium">{getDisplayStatus(selectedSubmission.status)}</span>
+                    </div>
+                  </div>
+                  <pre className="p-4 text-sm text-gray-300 overflow-x-auto whitespace-pre-wrap">
+                    <code>{selectedSubmission.code || 'Code not available'}</code>
+                  </pre>
+                </div>
+
+                {/* Additional Information */}
+                <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-gray-800 rounded-lg p-4">
+                    <h4 className="text-sm font-semibold text-gray-300 mb-2">Test Cases</h4>
+                    <p className="text-lg font-bold text-white">
+                      {selectedSubmission.passedTestCases || 0}/{selectedSubmission.totalTestCases || 0}
+                    </p>
+                    <div className="w-full bg-gray-700 rounded-full h-2 mt-2">
+                      <div 
+                        className={`h-2 rounded-full ${
+                          (selectedSubmission.passedTestCases || 0) === (selectedSubmission.totalTestCases || 0) ? 'bg-green-500' : 'bg-yellow-500'
+                        }`}
+                        style={{ 
+                          width: `${selectedSubmission.totalTestCases ? (selectedSubmission.passedTestCases / selectedSubmission.totalTestCases) * 100 : 0}%` 
+                        }}
+                      ></div>
+                    </div>
+                  </div>
+                  <div className="bg-gray-800 rounded-lg p-4">
+                    <h4 className="text-sm font-semibold text-gray-300 mb-2">Submitted</h4>
+                    <p className="text-sm text-white">
+                      {formatDate(selectedSubmission.submittedAt).date}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {formatDate(selectedSubmission.submittedAt).time}
+                    </p>
+                  </div>
+                  <div className="bg-gray-800 rounded-lg p-4">
+                    <h4 className="text-sm font-semibold text-gray-300 mb-2">Final Score</h4>
+                    <p className={`text-2xl font-bold ${(selectedSubmission.score || 0) >= 70 ? 'text-green-400' : (selectedSubmission.score || 0) >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                      {selectedSubmission.score || 0}%
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="flex justify-end space-x-3 p-6 border-t border-gray-700">
+                <button
+                  onClick={closeCodeModal}
+                  className="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
