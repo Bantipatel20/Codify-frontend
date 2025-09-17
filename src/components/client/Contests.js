@@ -1,7 +1,7 @@
 // src/components/client/Contests.js
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HiStar, HiCalendar, HiClock, HiUsers, HiPlay, HiEye, HiFilter, HiRefresh } from 'react-icons/hi';
+import { HiStar, HiCalendar, HiClock, HiUsers, HiPlay, HiEye, HiRefresh } from 'react-icons/hi';
 import { contestAPI, authAPI } from '../../services/api';
 
 const Contests = () => {
@@ -10,7 +10,6 @@ const Contests = () => {
   const [filteredContests, setFilteredContests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [statusFilter, setStatusFilter] = useState('All');
   const [userProfile, setUserProfile] = useState(null);
 
   // Memoize fetchUserProfile to prevent unnecessary re-renders
@@ -121,6 +120,8 @@ const Contests = () => {
           isRegistered: checkRegistration(contest)
         }));
         setContests(contestsData);
+        // Show only eligible contests
+        setFilteredContests(contestsData.filter(contest => contest.isEligible));
       } else {
         throw new Error(response.error || 'Failed to fetch contests');
       }
@@ -131,20 +132,6 @@ const Contests = () => {
       setLoading(false);
     }
   }, [userProfile, checkEligibility, checkRegistration]);
-
-  // Memoize filter function to prevent unnecessary re-renders
-  const filterContests = useCallback(() => {
-    let filtered = contests;
-
-    if (statusFilter !== 'All') {
-      filtered = filtered.filter(contest => contest.status === statusFilter);
-    }
-
-    // Only show contests user is eligible for
-    filtered = filtered.filter(contest => contest.isEligible);
-
-    setFilteredContests(filtered);
-  }, [contests, statusFilter]);
 
   // First useEffect: Fetch user profile
   useEffect(() => {
@@ -157,11 +144,6 @@ const Contests = () => {
       fetchContests();
     }
   }, [fetchContests, userProfile]);
-
-  // Third useEffect: Filter contests when contests or filter changes
-  useEffect(() => {
-    filterContests();
-  }, [filterContests]);
 
   const handleRegister = async (contestId) => {
     try {
@@ -265,100 +247,6 @@ const Contests = () => {
           </div>
           <h1 className="text-5xl font-bold text-white mb-4">Coding Contests</h1>
           <p className="text-gray-300 text-xl">Compete with fellow coders and showcase your skills</p>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm mb-1">Available Contests</p>
-                <p className="text-2xl font-bold text-white">{contests.length}</p>
-              </div>
-              <HiStar className="text-yellow-400 text-2xl" />
-            </div>
-          </div>
-
-          <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm mb-1">Upcoming</p>
-                <p className="text-2xl font-bold text-blue-400">
-                  {contests.filter(c => c.status === 'Upcoming').length}
-                </p>
-              </div>
-              <HiCalendar className="text-blue-400 text-2xl" />
-            </div>
-          </div>
-
-          <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm mb-1">Active</p>
-                <p className="text-2xl font-bold text-green-400">
-                  {contests.filter(c => c.status === 'Active').length}
-                </p>
-              </div>
-              <HiPlay className="text-green-400 text-2xl" />
-            </div>
-          </div>
-
-          <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm mb-1">Registered</p>
-                <p className="text-2xl font-bold text-purple-400">
-                  {contests.filter(c => c.isRegistered).length}
-                </p>
-              </div>
-              <HiUsers className="text-purple-400 text-2xl" />
-            </div>
-          </div>
-        </div>
-
-        {/* User Profile Info */}
-        {userProfile && (
-          <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-4 mb-6">
-            <h3 className="text-sm font-semibold text-white mb-2">Your Profile</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-              <div>
-                <span className="text-gray-400">Department:</span>
-                <span className="text-white ml-2">{userProfile.department || 'Not Set'}</span>
-              </div>
-              <div>
-                <span className="text-gray-400">Semester:</span>
-                <span className="text-white ml-2">{userProfile.semester || 'Not Set'}</span>
-              </div>
-              <div>
-                <span className="text-gray-400">Division:</span>
-                <span className="text-white ml-2">{userProfile.division || 'Not Set'}</span>
-              </div>
-              <div>
-                <span className="text-gray-400">Batch:</span>
-                <span className="text-white ml-2">{userProfile.batch || 'Not Set'}</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Filters */}
-        <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6 mb-8">
-          <div className="flex items-center space-x-3 mb-4">
-            <HiFilter className="text-blue-400 text-xl" />
-            <h3 className="text-lg font-semibold text-white">Filter Contests</h3>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="All">All Contests</option>
-              <option value="Upcoming">Upcoming</option>
-              <option value="Active">Active</option>
-              <option value="Completed">Completed</option>
-            </select>
-          </div>
         </div>
 
         {/* Contests List */}
@@ -499,7 +387,7 @@ const Contests = () => {
               {contests.length === 0 
                 ? "No contests are available at the moment." 
                 : userProfile 
-                  ? "No contests match your profile criteria or current filter settings."
+                  ? "No contests match your profile criteria."
                   : "Please log in to view available contests."
               }
             </p>
