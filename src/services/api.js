@@ -943,12 +943,12 @@ export const compilerAPI = {
   }
 };
 
-// Submissions APIs - COMPLETE IMPLEMENTATION
+// Submissions APIs - COMPLETE IMPLEMENTATION WITH REAL DATA CONNECTION
 export const submissionsAPI = {
   // GET /api/submissions - Get all submissions with pagination and filtering
   getAllSubmissions: async (params = {}) => {
     try {
-      const { page = 1, limit = 10, userId, problemId, contestId, status, language, startDate, endDate } = params;
+      const { page = 1, limit = 100, userId, problemId, contestId, status, language, startDate, endDate } = params;
       const queryParams = new URLSearchParams();
       
       queryParams.append('page', page.toString());
@@ -962,148 +962,24 @@ export const submissionsAPI = {
       if (startDate) queryParams.append('startDate', startDate);
       if (endDate) queryParams.append('endDate', endDate);
       
+      console.log('🔄 Fetching submissions with params:', params);
+      
       const response = await api.get(`/api/submissions?${queryParams.toString()}`);
+      console.log('✅ Submissions API response:', response.data);
+      
       return {
         success: true,
-        data: response.data.data || [],
+        data: response.data.data || response.data.submissions || [],
         pagination: response.data.pagination || {}
       };
     } catch (error) {
-      console.error('Error fetching submissions:', error);
-      // Return comprehensive mock data when API is not available
+      console.error('❌ Error fetching submissions:', error);
+      
+      // Return error instead of mock data to identify issues
       return {
-        success: true,
-        data: [
-          {
-            _id: '67890abcdef1234567890001',
-            userId: { _id: '1', username: '23cs058', name: 'John Doe' },
-            problemId: '507f1f77bcf86cd799439011',
-            code: 'console.log("Hello World");',
-            language: 'javascript',
-            status: 'accepted',
-            score: 100,
-            totalTestCases: 5,
-            passedTestCases: 5,
-            executionTime: 120,
-            memoryUsed: 1024000,
-            submittedAt: new Date('2024-01-15T10:30:00Z'),
-            evaluatedAt: new Date('2024-01-15T10:30:05Z'),
-            testCaseResults: [
-              { testCaseIndex: 0, status: 'passed', executionTime: 24 },
-              { testCaseIndex: 1, status: 'passed', executionTime: 23 },
-              { testCaseIndex: 2, status: 'passed', executionTime: 25 },
-              { testCaseIndex: 3, status: 'passed', executionTime: 24 },
-              { testCaseIndex: 4, status: 'passed', executionTime: 24 }
-            ]
-          },
-          {
-            _id: '67890abcdef1234567890002',
-            userId: { _id: '2', username: '23cs060', name: 'Jane Smith' },
-            problemId: '507f1f77bcf86cd799439012',
-            code: 'print("Hello World")',
-            language: 'python',
-            status: 'wrong_answer',
-            score: 60,
-            totalTestCases: 5,
-            passedTestCases: 3,
-            executionTime: 250,
-            memoryUsed: 2048000,
-            submittedAt: new Date('2024-01-14T14:20:00Z'),
-            evaluatedAt: new Date('2024-01-14T14:20:03Z'),
-            testCaseResults: [
-              { testCaseIndex: 0, status: 'passed', executionTime: 50 },
-              { testCaseIndex: 1, status: 'passed', executionTime: 48 },
-              { testCaseIndex: 2, status: 'failed', executionTime: 52 },
-              { testCaseIndex: 3, status: 'passed', executionTime: 49 },
-              { testCaseIndex: 4, status: 'failed', executionTime: 51 }
-            ]
-          },
-          {
-            _id: '67890abcdef1234567890003',
-            userId: { _id: '3', username: '23cs042', name: 'Bob Johnson' },
-            problemId: '507f1f77bcf86cd799439013',
-            code: '#include<iostream>\nusing namespace std;\nint main(){cout<<"Hello";return 0;}',
-            language: 'cpp',
-            status: 'compilation_error',
-            score: 0,
-            totalTestCases: 3,
-            passedTestCases: 0,
-            executionTime: 0,
-            memoryUsed: 0,
-            submittedAt: new Date('2024-01-13T09:15:00Z'),
-            evaluatedAt: new Date('2024-01-13T09:15:02Z'),
-            testCaseResults: []
-          },
-          {
-            _id: '67890abcdef1234567890004',
-            userId: { _id: '4', username: '23cs045', name: 'Alice Brown' },
-            problemId: '507f1f77bcf86cd799439011',
-            code: 'public class Main { public static void main(String[] args) { System.out.println("Hello"); } }',
-            language: 'java',
-            status: 'accepted',
-            score: 100,
-            totalTestCases: 4,
-            passedTestCases: 4,
-            executionTime: 180,
-            memoryUsed: 3072000,
-            submittedAt: new Date('2024-01-12T16:45:00Z'),
-            evaluatedAt: new Date('2024-01-12T16:45:04Z'),
-            testCaseResults: [
-              { testCaseIndex: 0, status: 'passed', executionTime: 45 },
-              { testCaseIndex: 1, status: 'passed', executionTime: 44 },
-              { testCaseIndex: 2, status: 'passed', executionTime: 46 },
-              { testCaseIndex: 3, status: 'passed', executionTime: 45 }
-            ]
-          },
-          {
-            _id: '67890abcdef1234567890005',
-            userId: { _id: '5', username: '23cs033', name: 'Charlie Wilson' },
-            problemId: '507f1f77bcf86cd799439012',
-            code: 'def solve(): pass\nprint(solve())',
-            language: 'python',
-            status: 'runtime_error',
-            score: 0,
-            totalTestCases: 5,
-            passedTestCases: 0,
-            executionTime: 0,
-            memoryUsed: 1536000,
-            submittedAt: new Date('2024-01-11T11:30:00Z'),
-            evaluatedAt: new Date('2024-01-11T11:30:01Z'),
-            testCaseResults: [
-              { testCaseIndex: 0, status: 'error', executionTime: 0, errorMessage: 'NoneType error' }
-            ]
-          },
-          {
-            _id: '67890abcdef1234567890006',
-            userId: { _id: '6', username: '23cs028', name: 'Diana Prince' },
-            problemId: '507f1f77bcf86cd799439014',
-            code: 'package main\nimport "fmt"\nfunc main() { fmt.Println("Hello") }',
-            language: 'go',
-            status: 'time_limit_exceeded',
-            score: 20,
-            totalTestCases: 5,
-            passedTestCases: 1,
-            executionTime: 5000,
-            memoryUsed: 2560000,
-            submittedAt: new Date('2024-01-10T13:20:00Z'),
-            evaluatedAt: new Date('2024-01-10T13:20:05Z'),
-            testCaseResults: [
-              { testCaseIndex: 0, status: 'passed', executionTime: 100 },
-              { testCaseIndex: 1, status: 'timeout', executionTime: 5000 },
-              { testCaseIndex: 2, status: 'timeout', executionTime: 5000 },
-              { testCaseIndex: 3, status: 'timeout', executionTime: 5000 },
-              { testCaseIndex: 4, status: 'timeout', executionTime: 5000 }
-            ]
-          }
-        ],
-        pagination: {
-          currentPage: 1,
-          totalPages: 1,
-          totalSubmissions: 6,
-          hasNextPage: false,
-          hasPrevPage: false,
-          limit: 10
-        }
+        success: false,
+        error: error.response?.data?.error || error.message || 'Failed to fetch submissions',
+        data: []
       };
     }
   },
@@ -1120,22 +996,9 @@ export const submissionsAPI = {
       };
     } catch (error) {
       console.error('❌ Error submitting solution:', error);
-      // Mock submission result when API is not available
       return {
-        success: true,
-        data: {
-          _id: Date.now().toString(),
-          submissionId: Date.now().toString(),
-          status: 'accepted',
-          score: Math.floor(Math.random() * 100) + 1,
-          totalTestCases: 5,
-          passedTestCases: Math.floor(Math.random() * 5) + 1,
-          executionTime: Math.floor(Math.random() * 1000) + 100,
-          memoryUsed: Math.floor(Math.random() * 5000000) + 1000000,
-          submittedAt: new Date().toISOString(),
-          evaluatedAt: new Date().toISOString()
-        },
-        message: 'Submission created successfully (mock)'
+        success: false,
+        error: error.response?.data?.error || error.message || 'Failed to submit solution'
       };
     }
   },
@@ -1153,7 +1016,8 @@ export const submissionsAPI = {
     } catch (error) {
       console.error('Error fetching user submissions:', error);
       return {
-        success: true,
+        success: false,
+        error: error.response?.data?.error || error.message,
         data: [],
         pagination: {
           currentPage: 1,
@@ -1168,7 +1032,7 @@ export const submissionsAPI = {
   // GET /api/submissions/:id - Get submission by ID
   getSubmissionById: async (submissionId) => {
     try {
-      const response = await api.get(`/api/submissions/${submissionId}`);
+      const response = await api.get(`/api/submissions/submission/${submissionId}`);
       return {
         success: true,
         data: response.data.data || response.data
@@ -1176,19 +1040,8 @@ export const submissionsAPI = {
     } catch (error) {
       console.error('Error fetching submission:', error);
       return {
-        success: true,
-        data: {
-          _id: submissionId,
-          status: 'accepted',
-          code: '// Mock code\nconsole.log("Hello World");',
-          language: 'javascript',
-          score: 85,
-          totalTestCases: 4,
-          passedTestCases: 3,
-          executionTime: 150,
-          memoryUsed: 1500000,
-          submittedAt: new Date().toISOString()
-        }
+        success: false,
+        error: error.response?.data?.error || error.message
       };
     }
   },
@@ -1197,7 +1050,7 @@ export const submissionsAPI = {
   getProblemSubmissions: async (problemId, params = {}) => {
     try {
       const { page = 1, limit = 10 } = params;
-      const response = await api.get(`/api/submissions/problem/${problemId}?page=${page}&limit=${limit}`);
+      const response = await api.get(`/api/submissions/problem/${problemId}/submissions?page=${page}&limit=${limit}`);
       return {
         success: true,
         data: response.data.data || [],
@@ -1206,7 +1059,8 @@ export const submissionsAPI = {
     } catch (error) {
       console.error('Error fetching problem submissions:', error);
       return {
-        success: true,
+        success: false,
+        error: error.response?.data?.error || error.message,
         data: [],
         pagination: {
           currentPage: 1,
@@ -1229,27 +1083,15 @@ export const submissionsAPI = {
     } catch (error) {
       console.error('Error fetching submission stats:', error);
       return {
-        success: true,
+        success: false,
+        error: error.message,
         data: {
-          totalSubmissions: 247,
-          acceptedSubmissions: 189,
-          todaySubmissions: 23,
-          successRate: 76.52,
-          languageStats: [
-            { _id: 'javascript', count: 67 },
-            { _id: 'python', count: 58 },
-            { _id: 'cpp', count: 45 },
-            { _id: 'java', count: 38 },
-            { _id: 'go', count: 21 },
-            { _id: 'c', count: 18 }
-          ],
-          statusStats: [
-            { _id: 'accepted', count: 189 },
-            { _id: 'wrong_answer', count: 32 },
-            { _id: 'compilation_error', count: 15 },
-            { _id: 'runtime_error', count: 8 },
-            { _id: 'time_limit_exceeded', count: 3 }
-          ]
+          totalSubmissions: 0,
+          acceptedSubmissions: 0,
+          todaySubmissions: 0,
+          successRate: 0,
+          languageStats: [],
+          statusStats: []
         }
       };
     }
