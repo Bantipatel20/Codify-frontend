@@ -1,11 +1,12 @@
 // src/components/client/Submissions.js
 import React, { useState, useEffect } from 'react';
-import { HiDocumentText, HiFilter, HiCheckCircle, HiXCircle, HiClock,  HiRefresh, HiExclamation, HiCode, HiX } from 'react-icons/hi';
-import { authAPI, submissionsAPI } from '../../services/api';
+import { HiDocumentText, HiFilter, HiCheckCircle, HiXCircle, HiClock, HiRefresh, HiExclamation, HiCode, HiX } from 'react-icons/hi';
+import { authAPI, submissionsAPI, problemsAPI } from '../../services/api';
 
 const Submissions = () => {
   const [submissions, setSubmissions] = useState([]);
   const [filteredSubmissions, setFilteredSubmissions] = useState([]);
+  const [problemsMap, setProblemsMap] = useState(new Map()); // Map to store problem details
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState('All');
@@ -19,6 +20,29 @@ const Submissions = () => {
 
   // Auto-refresh interval
   const [refreshInterval, setRefreshInterval] = useState(null);
+
+  // Fetch all problems to create a lookup map
+  const fetchProblemsMap = async () => {
+    try {
+      console.log('🔄 Fetching problems for name lookup...');
+      const response = await problemsAPI.getAllProblems({
+        limit: 1000, // Get all problems
+        page: 1
+      });
+
+      if (response.success && response.data) {
+        const map = new Map();
+        response.data.forEach(problem => {
+          map.set(problem._id, problem);
+        });
+        setProblemsMap(map);
+        console.log('✅ Problems map created with', map.size, 'problems');
+      }
+    } catch (err) {
+      console.error('❌ Error fetching problems map:', err);
+      // Don't set error here as it's not critical
+    }
+  };
 
   // Fetch user submissions
   const fetchSubmissions = async () => {
@@ -34,6 +58,9 @@ const Submissions = () => {
       setUserProfile(currentUser);
       
       console.log('🔄 Fetching submissions for user:', currentUser._id);
+      
+      // Fetch problems map first, then submissions
+      await fetchProblemsMap();
       
       const response = await submissionsAPI.getUserSubmissions(currentUser._id, {
         page: 1,
@@ -88,12 +115,10 @@ const Submissions = () => {
 
   // Function to handle view code button click
   const handleViewCode = (submission) => {
-    // If the submission already has code data, show it directly
     if (submission.code) {
       setSelectedSubmission(submission);
       setShowCodeModal(true);
     } else {
-      // Otherwise fetch the full submission details
       fetchSubmissionDetails(submission._id);
     }
   };
@@ -231,14 +256,28 @@ const Submissions = () => {
     return langMap[language] || language;
   };
 
+  // Get problem title from problemsMap
   const getProblemTitle = (problemId) => {
-    // Convert problemId to readable title
-    if (typeof problemId === 'string') {
-      return problemId.split('-').map(word => 
+    // Handle different problemId formats
+    let id = problemId;
+    if (typeof problemId === 'object' && problemId._id) {
+      id = problemId._id;
+    }
+    
+    // Look up problem in the map
+    const problem = problemsMap.get(id);
+    if (problem) {
+      return problem.title;
+    }
+    
+    // Fallback: convert ID to readable title if problem not found
+    if (typeof id === 'string') {
+      return id.split('-').map(word => 
         word.charAt(0).toUpperCase() + word.slice(1)
       ).join(' ');
     }
-    return problemId || 'Unknown Problem';
+    
+    return 'Unknown Problem';
   };
 
   // Get unique values for filters
@@ -298,7 +337,7 @@ const Submissions = () => {
           <p className="text-gray-300 text-xl">Track your coding journey and progress</p>
           {userProfile && (
             <p className="text-gray-400 text-sm mt-2">
-              Welcome back, {userProfile.username}!
+              Welcome back, {userProfile.username}! You've made {submissions.length} submission{submissions.length !== 1 ? 's' : ''} so far! 🎯
             </p>
           )}
         </div>
