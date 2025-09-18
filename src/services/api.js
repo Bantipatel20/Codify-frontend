@@ -1,1194 +1,404 @@
 // src/services/api.js
 import axios from 'axios';
 
-// API Base URL - your backend runs on port 5000
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+// Base URL for API calls
+const BASE_URL = 'http://localhost:5000';
 
-// Create axios instance
+// Create axios instance with default config
 const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 30000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+    baseURL: BASE_URL,
+    timeout: 30000,
+    headers: {
+        'Content-Type': 'application/json',
+    },
 });
 
-// Request interceptor to add auth token
+// Request interceptor to add auth token if available
 api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    (config) => {
+        const token = localStorage.getItem('token');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+    },
+    (error) => {
+        return Promise.reject(error);
     }
-    console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`);
-    return config;
-  },
-  (error) => {
-    console.error('❌ Request Error:', error);
-    return Promise.reject(error);
-  }
 );
 
 // Response interceptor for error handling
 api.interceptors.response.use(
-  (response) => {
-    console.log(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url}`, response.data);
-    return response;
-  },
-  (error) => {
-    console.error('❌ API Error:', error.response || error.message);
-    
-    // Handle 401 Unauthorized - redirect to login
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+    (response) => response,
+    (error) => {
+        if (error.response?.status === 401) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/login';
+        }
+        return Promise.reject(error);
     }
-    
-    return Promise.reject(error);
-  }
 );
 
-// Problems APIs - exactly matching your backend routes
-export const problemsAPI = {
-  // GET /api/problems - Get all problems with pagination and filtering
-  getAllProblems: async (params = {}) => {
-    try {
-      const { page = 1, limit = 10, difficulty, search, tags, createdBy } = params;
-      const queryParams = new URLSearchParams();
-      
-      queryParams.append('page', page.toString());
-      queryParams.append('limit', limit.toString());
-      
-      if (difficulty) queryParams.append('difficulty', difficulty);
-      if (search) queryParams.append('search', search);
-      if (tags) queryParams.append('tags', tags);
-      if (createdBy) queryParams.append('createdBy', createdBy);
-      
-      const response = await api.get(`/api/problems?${queryParams.toString()}`);
-      return {
-        success: true,
-        data: response.data.data || response.data.problems || [],
-        pagination: response.data.pagination || {}
-      };
-    } catch (error) {
-      console.error('Error fetching problems:', error);
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message,
-        data: []
-      };
-    }
-  },
-
-  // GET /api/problems/:id - Get problem by ID
-  getProblemById: async (id) => {
-    try {
-      const response = await api.get(`/api/problems/${id}`);
-      return {
-        success: true,
-        data: response.data.data || response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message
-      };
-    }
-  },
-
-  // POST /api/problems - Create new problem
-  createProblem: async (problemData) => {
-    try {
-      // Validate required fields before sending
-      if (!problemData.title || !problemData.description) {
-        throw new Error('Title and description are required');
-      }
-      
-      if (!problemData.testCases || problemData.testCases.length === 0) {
-        throw new Error('At least one test case is required');
-      }
-      
-      // Validate test cases
-      for (let i = 0; i < problemData.testCases.length; i++) {
-        const testCase = problemData.testCases[i];
-        if (!testCase.input || !testCase.output) {
-          throw new Error(`Test case ${i + 1} must have both input and output`);
-        }
-      }
-      
-      // Ensure createdBy is a valid ObjectId string
-      let finalProblemData = { ...problemData };
-      
-      if (!finalProblemData.createdBy) {
-        // Use the admin ID as fallback
-        finalProblemData.createdBy = '68ad4516c3be4979ebac1d49';
-        console.log('⚠️ No createdBy provided, using admin ID as fallback');
-      }
-      
-      // Ensure createdBy is a string, not an object
-      if (typeof finalProblemData.createdBy === 'object') {
-        finalProblemData.createdBy = '68ad4516c3be4979ebac1d49';
-        console.log('⚠️ createdBy was an object, converted to admin ID string');
-      }
-      
-      console.log('Creating problem with data:', finalProblemData);
-      
-      const response = await api.post('/api/problems', finalProblemData);
-      return {
-        success: true,
-        data: response.data.data || response.data,
-        message: 'Problem created successfully'
-      };
-      
-    } catch (error) {
-      console.error('Error creating problem:', error);
-      return {
-        success: false,
-        error: error.response?.data?.error || error.response?.data?.message || error.message
-      };
-    }
-  },
-
-  // PUT /api/problems/:id - Update problem
-  updateProblem: async (id, problemData) => {
-    try {
-      // Validate required fields
-      if (!problemData.title || !problemData.description) {
-        throw new Error('Title and description are required');
-      }
-      
-      if (!problemData.testCases || problemData.testCases.length === 0) {
-        throw new Error('At least one test case is required');
-      }
-      
-      console.log('Updating problem with data:', problemData);
-      
-      const response = await api.put(`/api/problems/${id}`, problemData);
-      return {
-        success: true,
-        data: response.data.data || response.data,
-        message: 'Problem updated successfully'
-      };
-    } catch (error) {
-      console.error('Error updating problem:', error);
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message
-      };
-    }
-  },
-
-  // DELETE /api/problems/:id - Delete problem
-  deleteProblem: async (id) => {
-    try {
-      await api.delete(`/api/problems/${id}`);
-      return {
-        success: true,
-        message: 'Problem deleted successfully'
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message
-      };
-    }
-  },
-
-  // GET /api/problems/difficulty/:difficulty - Get problems by difficulty
-  getProblemsByDifficulty: async (difficulty) => {
-    try {
-      const response = await api.get(`/api/problems/difficulty/${difficulty}`);
-      return {
-        success: true,
-        data: response.data.data || response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message,
-        data: []
-      };
-    }
-  },
-
-  // GET /api/problems/tags/:tag - Get problems by tag
-  getProblemsByTag: async (tag) => {
-    try {
-      const response = await api.get(`/api/problems/tags/${tag}`);
-      return {
-        success: true,
-        data: response.data.data || response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message,
-        data: []
-      };
-    }
-  },
-
-  // GET /api/problems/meta/tags - Get all unique tags
-  getAllTags: async () => {
-    try {
-      const response = await api.get('/api/problems/meta/tags');
-      return {
-        success: true,
-        data: response.data.data || response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message,
-        data: []
-      };
-    }
-  },
-
-  // GET /api/problems/meta/statistics - Get problem statistics
-  getStatistics: async () => {
-    try {
-      const response = await api.get('/api/problems/meta/statistics');
-      return {
-        success: true,
-        data: response.data.data || response.data || {
-          totalProblems: 0,
-          submissions: {
-            total: 0,
-            successRate: 0
-          }
-        }
-      };
-    } catch (error) {
-      console.error('Error fetching statistics:', error);
-      // Return mock statistics to prevent dashboard errors
-      return {
-        success: true,
-        data: {
-          totalProblems: 0,
-          submissions: {
-            total: 0,
-            successRate: 0,
-            today: 0
-          }
-        }
-      };
-    }
-  },
-
-  // POST /api/problems/:id/test - Test solution against problem
-  testSolution: async (id, solutionData) => {
-    try {
-      const response = await api.post(`/api/problems/${id}/test`, solutionData);
-      return {
-        success: true,
-        data: response.data.data || response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message
-      };
-    }
-  }
-};
-
-// User APIs - Using your actual backend endpoints
-export const userAPI = {
-  // GET /users - Get all users with pagination and filtering
-  getAllUsers: async (params = {}) => {
-    try {
-      const { page = 1, limit = 10, name, email } = params;
-      const queryParams = new URLSearchParams();
-      
-      queryParams.append('page', page.toString());
-      queryParams.append('limit', limit.toString());
-      
-      if (name) queryParams.append('name', name);
-      if (email) queryParams.append('email', email);
-      
-      const response = await fetch(`http://localhost:5000/users?${queryParams.toString()}`);
-      const data = await response.json();
-      
-      if (data.success) {
-        return {
-          success: true,
-          data: {
-            users: data.data || [],
-            totalUsers: data.pagination?.totalUsers || 0,
-            pagination: data.pagination || {}
-          },
-          // Also include at root level for backward compatibility
-          users: data.data || [],
-          totalUsers: data.pagination?.totalUsers || 0,
-          pagination: data.pagination || {}
-        };
-      } else {
-        throw new Error(data.error || 'Failed to fetch users');
-      }
-    } catch (error) {
-      console.error('Error fetching users:', error);
-      return {
-        success: false,
-        error: error.message,
-        data: {
-          users: [],
-          totalUsers: 0,
-          pagination: {}
-        }
-      };
-    }
-  },
-  
-  // GET /user/:id - Get user by ID
-  getUserById: async (id) => {
-    try {
-      const response = await fetch(`http://localhost:5000/user/${id}`);
-      const data = await response.json();
-      
-      if (data.success) {
-        return {
-          success: true,
-          data: data.data
-        };
-      } else {
-        throw new Error(data.error || 'User not found');
-      }
-    } catch (error) {
-      console.error('Error fetching user:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  },
-  
-  // POST /user - Create new user
-  createUser: async (userData) => {
-    try {
-      const response = await fetch('http://localhost:5000/user', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(userData)
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        return {
-          success: true,
-          data: data.data,
-          message: data.message
-        };
-      } else {
-        throw new Error(data.error || 'Failed to create user');
-      }
-    } catch (error) {
-      console.error('Error creating user:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  },
-  
-  // PUT /user/:id - Update user
-  updateUser: async (id, userData) => {
-    try {
-      console.log('Updating user:', id, 'with data:', userData);
-      
-      const response = await fetch(`http://localhost:5000/user/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(userData)
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        return {
-          success: true,
-          data: data.data,
-          message: data.message
-        };
-      } else {
-        throw new Error(data.error || 'Failed to update user');
-      }
-    } catch (error) {
-      console.error('Error updating user:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  },
-  
-  // DELETE /user/:id - Delete user
-  deleteUser: async (id) => {
-    try {
-      const response = await fetch(`http://localhost:5000/user/${id}`, {
-        method: 'DELETE'
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        return {
-          success: true,
-          message: data.message,
-          data: data.data
-        };
-      } else {
-        throw new Error(data.error || 'Failed to delete user');
-      }
-    } catch (error) {
-      console.error('Error deleting user:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  },
-
-  // Additional helper methods for admin settings
-  updateAdminCredentials: async (adminId, credentials) => {
-    try {
-      return await userAPI.updateUser(adminId, credentials);
-    } catch (error) {
-      console.error('Error updating admin credentials:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  },
-
-  getAdminUser: async (adminId) => {
-    try {
-      return await userAPI.getUserById(adminId);
-    } catch (error) {
-      console.error('Error fetching admin user:', error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
-};
-
-// Helper function to get current user
-const getCurrentUser = () => {
-  try {
-    const user = localStorage.getItem('user');
-    return user ? JSON.parse(user) : null;
-  } catch (error) {
-    console.error('Error getting current user:', error);
-    return null;
-  }
-};
-
-// Auth APIs using your actual backend for login
+// Auth API
 export const authAPI = {
-  // Real login using your backend
-  login: async (username, password) => {
-    try {
-      const response = await fetch('http://localhost:5000/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username, password })
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        const user = {
-          _id: data.userId || (username === 'admin' ? '68ad4516c3be4979ebac1d49' : Date.now().toString()),
-          name: data.name || username,
-          email: `${username}@example.com`,
-          username: username,
-          role: data.role
-        };
-        
-        const token = btoa(JSON.stringify(user));
-        
-        // Store in localStorage
+    login: async (credentials) => {
+        try {
+            const response = await api.post('/login', credentials);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    getCurrentUser: () => {
+        try {
+            const userStr = localStorage.getItem('user');
+            return userStr ? JSON.parse(userStr) : null;
+        } catch (error) {
+            console.error('Error parsing user data:', error);
+            return null;
+        }
+    },
+
+    setCurrentUser: (user) => {
         localStorage.setItem('user', JSON.stringify(user));
-        localStorage.setItem('token', token);
-        localStorage.setItem('currentUser', username);
-        localStorage.setItem('userId', user._id);
-        
-        return {
-          success: true,
-          user: user,
-          token: token,
-          message: 'Login successful'
-        };
-      } else {
-        return {
-          success: false,
-          error: data.error || 'Login failed'
-        };
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      return {
-        success: false,
-        error: 'Network error during login'
-      };
-    }
-  },
-  
-  // Register new user
-  register: async (userData) => {
-    try {
-      const response = await userAPI.createUser(userData);
-      
-      if (response.success) {
-        const user = {
-          ...response.data,
-          role: 'student'
-        };
-        
-        const token = btoa(JSON.stringify(user));
-        
-        return {
-          success: true,
-          user: user,
-          token: token,
-          message: 'Registration successful'
-        };
-      } else {
-        return {
-          success: false,
-          error: response.error || 'Registration failed'
-        };
-      }
-    } catch (error) {
-      console.error('Registration error:', error);
-      return {
-        success: false,
-        error: 'Network error during registration'
-      };
-    }
-  },
-  
-  // Get current user from localStorage
-  getCurrentUser: () => {
-    return getCurrentUser();
-  },
-  
-  // Set current user
-  setCurrentUser: (user) => {
-    localStorage.setItem('user', JSON.stringify(user));
-  },
-  
-  // Logout
-  logout: () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    localStorage.removeUser('currentUser');
-    localStorage.removeItem('userId');
-  },
-  
-  // Check authentication
-  isAuthenticated: () => {
-    const token = localStorage.getItem('token');
-    const user = localStorage.getItem('user');
-    return !!(token && user);
-  },
+    },
 
-  // Change password
-  changePassword: async (userId, currentPassword, newPassword) => {
-    try {
-      // You might want to create a specific endpoint for password changes
-      // For now, using the general update endpoint
-      const response = await userAPI.updateUser(userId, {
-        password: newPassword
-      });
-      
-      return response;
-    } catch (error) {
-      console.error('Error changing password:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+    logout: () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('currentUser');
+        localStorage.removeItem('userId');
     }
-  }
 };
 
-// Contest APIs - Using your actual backend endpoints
+// User API
+export const userAPI = {
+    getAllUsers: async (params = {}) => {
+        try {
+            const response = await api.get('/users', { params });
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    getUserById: async (id) => {
+        try {
+            const response = await api.get(`/user/${id}`);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    createUser: async (userData) => {
+        try {
+            const response = await api.post('/user', userData);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    updateUser: async (id, userData) => {
+        try {
+            const response = await api.put(`/user/${id}`, userData);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    deleteUser: async (id) => {
+        try {
+            const response = await api.delete(`/user/${id}`);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    }
+};
+
+// Problems API
+export const problemsAPI = {
+    getAllProblems: async (params = {}) => {
+        try {
+            const response = await api.get('/api/problems', { params });
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    getProblemById: async (id) => {
+        try {
+            const response = await api.get(`/api/problems/${id}`);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    createProblem: async (problemData) => {
+        try {
+            const response = await api.post('/api/problems', problemData);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    updateProblem: async (id, problemData) => {
+        try {
+            const response = await api.put(`/api/problems/${id}`, problemData);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    deleteProblem: async (id) => {
+        try {
+            const response = await api.delete(`/api/problems/${id}`);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    getAllTags: async () => {
+        try {
+            const response = await api.get('/api/problems/meta/tags');
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    getStatistics: async () => {
+        try {
+            const response = await api.get('/api/problems/meta/statistics');
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    }
+};
+
+// Contest API
 export const contestAPI = {
-  // GET /api/contests - Get all contests with pagination and filtering
-  getAllContests: async (params = {}) => {
-    try {
-      const { page = 1, limit = 10, status, search, createdBy, startDate, endDate } = params;
-      const queryParams = new URLSearchParams();
-      
-      queryParams.append('page', page.toString());
-      queryParams.append('limit', limit.toString());
-      
-      if (status) queryParams.append('status', status);
-      if (search) queryParams.append('search', search);
-      if (createdBy) queryParams.append('createdBy', createdBy);
-      if (startDate) queryParams.append('startDate', startDate);
-      if (endDate) queryParams.append('endDate', endDate);
-      
-      const response = await api.get(`/api/contests?${queryParams.toString()}`);
-      return {
-        success: true,
-        data: response.data.data || [],
-        pagination: response.data.pagination || {}
-      };
-    } catch (error) {
-      console.error('Error fetching contests:', error);
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message,
-        data: []
-      };
-    }
-  },
+    getAllContests: async (params = {}) => {
+        try {
+            const response = await api.get('/api/contests', { params });
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
 
-  // GET /api/contests/:id - Get contest by ID
-  getContestById: async (id) => {
-    try {
-      const response = await api.get(`/api/contests/${id}`);
-      return {
-        success: true,
-        data: response.data.data || response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message
-      };
-    }
-  },
+    getContestById: async (id) => {
+        try {
+            const response = await api.get(`/api/contests/${id}`);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
 
-  // POST /api/contests - Create new contest
-  createContest: async (contestData) => {
-    try {
-      // Validate required fields before sending
-      if (!contestData.title || !contestData.description) {
-        throw new Error('Title and description are required');
-      }
-      
-      if (!contestData.startDate || !contestData.endDate) {
-        throw new Error('Start date and end date are required');
-      }
-      
-      if (!contestData.problems || contestData.problems.length === 0) {
-        throw new Error('At least one problem is required');
-      }
+    createContest: async (contestData) => {
+        try {
+            const response = await api.post('/api/contests', contestData);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
 
-      // Ensure createdBy is set
-      let finalContestData = { ...contestData };
-      
-      if (!finalContestData.createdBy) {
-        // Use the admin ID as fallback
-        finalContestData.createdBy = '68ad4516c3be4979ebac1d49';
-        console.log('⚠️ No createdBy provided, using admin ID as fallback');
-      }
-      
-      console.log('Creating contest with data:', finalContestData);
-      
-      const response = await api.post('/api/contests', finalContestData);
-      return {
-        success: true,
-        data: response.data.data || response.data,
-        message: 'Contest created successfully'
-      };
-      
-    } catch (error) {
-      console.error('Error creating contest:', error);
-      return {
-        success: false,
-        error: error.response?.data?.error || error.response?.data?.message || error.message
-      };
-    }
-  },
+    updateContest: async (id, contestData) => {
+        try {
+            const response = await api.put(`/api/contests/${id}`, contestData);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
 
-  // PUT /api/contests/:id - Update contest
-  updateContest: async (id, contestData) => {
-    try {
-      console.log('Updating contest with data:', contestData);
-      
-      const response = await api.put(`/api/contests/${id}`, contestData);
-      return {
-        success: true,
-        data: response.data.data || response.data,
-        message: 'Contest updated successfully'
-      };
-    } catch (error) {
-      console.error('Error updating contest:', error);
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message
-      };
-    }
-  },
+    deleteContest: async (id) => {
+        try {
+            const response = await api.delete(`/api/contests/${id}`);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
 
-  // DELETE /api/contests/:id - Delete contest
-  deleteContest: async (id) => {
-    try {
-      await api.delete(`/api/contests/${id}`);
-      return {
-        success: true,
-        message: 'Contest deleted successfully'
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message
-      };
-    }
-  },
+    registerParticipant: async (contestId, userId) => {
+        try {
+            const response = await api.post(`/api/contests/${contestId}/register`, { userId });
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
 
-  // POST /api/contests/:id/register - Register participant to contest
-  registerParticipant: async (contestId, userId) => {
-    try {
-      const response = await api.post(`/api/contests/${contestId}/register`, { userId });
-      return {
-        success: true,
-        data: response.data.data || response.data,
-        message: 'Participant registered successfully'
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message
-      };
-    }
-  },
+    getContestLeaderboard: async (contestId) => {
+        try {
+            const response = await api.get(`/api/contests/${contestId}/leaderboard`);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
 
-  // GET /api/contests/:id/leaderboard - Get contest leaderboard
-  getLeaderboard: async (contestId) => {
-    try {
-      const response = await api.get(`/api/contests/${contestId}/leaderboard`);
-      return {
-        success: true,
-        data: response.data.data || response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message
-      };
+    updateContestStatus: async (contestId, status) => {
+        try {
+            const response = await api.post(`/api/contests/${contestId}/status`, { status });
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
     }
-  },
-
-  // GET /api/contests/status/:status - Get contests by status
-  getContestsByStatus: async (status) => {
-    try {
-      const response = await api.get(`/api/contests/status/${status}`);
-      return {
-        success: true,
-        data: response.data.data || []
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message,
-        data: []
-      };
-    }
-  },
-
-  // GET /api/contests/filter/upcoming - Get upcoming contests
-  getUpcomingContests: async () => {
-    try {
-      const response = await api.get('/api/contests/filter/upcoming');
-      return {
-        success: true,
-        data: response.data.data || []
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message,
-        data: []
-      };
-    }
-  },
-
-  // GET /api/contests/filter/active - Get active contests
-  getActiveContests: async () => {
-    try {
-      const response = await api.get('/api/contests/filter/active');
-      return {
-        success: true,
-        data: response.data.data || []
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message,
-        data: []
-      };
-    }
-  },
-
-  // POST /api/contests/:id/status - Update contest status
-  updateContestStatus: async (contestId, status) => {
-    try {
-      const response = await api.post(`/api/contests/${contestId}/status`, { status });
-      return {
-        success: true,
-        data: response.data.data || response.data,
-        message: 'Contest status updated successfully'
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message
-      };
-    }
-  },
-
-  // GET /api/contests/:id/analytics - Get contest analytics
-  getContestAnalytics: async (contestId) => {
-    try {
-      const response = await api.get(`/api/contests/${contestId}/analytics`);
-      return {
-        success: true,
-        data: response.data.data || response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.message || error.message
-      };
-    }
-  }
 };
 
-// Compiler APIs - UPDATED TO MATCH YOUR BACKEND ROUTES
-export const compilerAPI = {
-  // GET /compile/languages - Match your backend route
-  getLanguages: async () => {
-    try {
-      console.log('🔄 Fetching languages from /compile/languages...');
-      const response = await api.get('/compile/languages');
-      if (response.data.success) {
-        console.log('✅ Successfully fetched languages:', response.data.data.languages);
-        return {
-          success: true,
-          data: response.data.data.languages
-        };
-      } else {
-        throw new Error('Failed to fetch languages');
-      }
-    } catch (error) {
-      console.error('❌ Failed to fetch languages:', error);
-      // Return fallback languages
-      return {
-        success: true,
-        data: [
-          { name: 'C++', key: 'cpp', version: 'GCC 9.2.0' },
-          { name: 'Java', key: 'java', version: 'OpenJDK 13.0.1' },
-          { name: 'Python3', key: 'python', version: '3.8.1' },
-          { name: 'C', key: 'c', version: 'GCC 9.2.0' },
-          { name: 'JavaScript', key: 'javascript', version: 'Node.js 12.14.0' },
-          { name: 'Go', key: 'go', version: '1.13.5' },
-          { name: 'Ruby', key: 'ruby', version: '2.7.0' },
-          { name: 'PHP', key: 'php', version: '7.4.1' }
-        ]
-      };
-    }
-  },
-  
-  // POST /compile - Match your backend route
-  compileCode: async (codeData) => {
-    try {
-      console.log('🔄 Compiling code:', codeData);
-      const response = await api.post('/compile', codeData);
-      
-      if (response.data.success) {
-        return {
-          success: true,
-          data: {
-            output: response.data.data?.output || response.data.output || 'Code executed successfully',
-            stderr: response.data.data?.stderr || response.data.stderr || '',
-            executionTime: response.data.executionTime || '0ms'
-          }
-        };
-      } else {
-        return {
-          success: false,
-          error: response.data.error || response.data.stderr || 'Compilation failed',
-          stderr: response.data.stderr || response.data.error || 'Unknown error'
-        };
-      }
-    } catch (error) {
-      console.error('❌ Compilation error:', error);
-      return {
-        success: false,
-        error: error.response?.data?.error || error.response?.data?.stderr || error.message || 'Compilation failed',
-        stderr: error.response?.data?.stderr || error.response?.data?.error || error.message || 'Unknown error'
-      };
-    }
-  },
-  
-  // Alias for backward compatibility
-  runCode: async (codeData) => {
-    return await compilerAPI.compileCode(codeData);
-  }
-};
-
-// Submissions APIs - COMPLETE IMPLEMENTATION WITH REAL DATA CONNECTION
+// Submissions API
 export const submissionsAPI = {
-  // GET /api/submissions - Get all submissions with pagination and filtering
-  getAllSubmissions: async (params = {}) => {
-    try {
-      const { page = 1, limit = 100, userId, problemId, contestId, status, language, startDate, endDate } = params;
-      const queryParams = new URLSearchParams();
-      
-      queryParams.append('page', page.toString());
-      queryParams.append('limit', limit.toString());
-      
-      if (userId) queryParams.append('userId', userId);
-      if (problemId) queryParams.append('problemId', problemId);
-      if (contestId) queryParams.append('contestId', contestId);
-      if (status) queryParams.append('status', status);
-      if (language) queryParams.append('language', language);
-      if (startDate) queryParams.append('startDate', startDate);
-      if (endDate) queryParams.append('endDate', endDate);
-      
-      console.log('🔄 Fetching submissions with params:', params);
-      
-      const response = await api.get(`/api/submissions?${queryParams.toString()}`);
-      console.log('✅ Submissions API response:', response.data);
-      
-      return {
-        success: true,
-        data: response.data.data || response.data.submissions || [],
-        pagination: response.data.pagination || {}
-      };
-    } catch (error) {
-      console.error('❌ Error fetching submissions:', error);
-      
-      // Return error instead of mock data to identify issues
-      return {
-        success: false,
-        error: error.response?.data?.error || error.message || 'Failed to fetch submissions',
-        data: []
-      };
-    }
-  },
-
-  // POST /api/submissions/submit - Submit solution
-  submitSolution: async (submissionData) => {
-    try {
-      console.log('🔄 Submitting solution:', submissionData);
-      const response = await api.post('/api/submissions/submit', submissionData);
-      return {
-        success: true,
-        data: response.data.data || response.data,
-        message: response.data.message || 'Submission created successfully'
-      };
-    } catch (error) {
-      console.error('❌ Error submitting solution:', error);
-      return {
-        success: false,
-        error: error.response?.data?.error || error.message || 'Failed to submit solution'
-      };
-    }
-  },
-  
-  // GET /api/submissions/user/:userId - Get user submissions
-  getUserSubmissions: async (userId, params = {}) => {
-    try {
-      const { page = 1, limit = 10 } = params;
-      const response = await api.get(`/api/submissions/user/${userId}?page=${page}&limit=${limit}`);
-      return {
-        success: true,
-        data: response.data.data || [],
-        pagination: response.data.pagination || {}
-      };
-    } catch (error) {
-      console.error('Error fetching user submissions:', error);
-      return {
-        success: false,
-        error: error.response?.data?.error || error.message,
-        data: [],
-        pagination: {
-          currentPage: 1,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPrevPage: false
+    submitCode: async (submissionData) => {
+        try {
+            const response = await api.post('/api/submissions/submit', submissionData);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
         }
-      };
-    }
-  },
-  
-  // GET /api/submissions/:id - Get submission by ID
-  getSubmissionById: async (submissionId) => {
-    try {
-      const response = await api.get(`/api/submissions/submission/${submissionId}`);
-      return {
-        success: true,
-        data: response.data.data || response.data
-      };
-    } catch (error) {
-      console.error('Error fetching submission:', error);
-      return {
-        success: false,
-        error: error.response?.data?.error || error.message
-      };
-    }
-  },
+    },
 
-  // GET /api/submissions/problem/:problemId - Get submissions by problem
-  getProblemSubmissions: async (problemId, params = {}) => {
-    try {
-      const { page = 1, limit = 10 } = params;
-      const response = await api.get(`/api/submissions/problem/${problemId}/submissions?page=${page}&limit=${limit}`);
-      return {
-        success: true,
-        data: response.data.data || [],
-        pagination: response.data.pagination || {}
-      };
-    } catch (error) {
-      console.error('Error fetching problem submissions:', error);
-      return {
-        success: false,
-        error: error.response?.data?.error || error.message,
-        data: [],
-        pagination: {
-          currentPage: 1,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPrevPage: false
+    getSubmissionById: async (id) => {
+        try {
+            const response = await api.get(`/api/submissions/submission/${id}`);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
         }
-      };
-    }
-  },
+    },
 
-  // GET /api/submissions/stats/overview - Get submission statistics
-  getSubmissionStats: async () => {
-    try {
-      const response = await api.get('/api/submissions/stats/overview');
-      return {
-        success: true,
-        data: response.data.data || {}
-      };
-    } catch (error) {
-      console.error('Error fetching submission stats:', error);
-      return {
-        success: false,
-        error: error.message,
-        data: {
-          totalSubmissions: 0,
-          acceptedSubmissions: 0,
-          todaySubmissions: 0,
-          successRate: 0,
-          languageStats: [],
-          statusStats: []
+    getUserSubmissions: async (userId, params = {}) => {
+        try {
+            const response = await api.get(`/api/submissions/user/${userId}`, { params });
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
         }
-      };
+    },
+
+    getAllSubmissions: async (params = {}) => {
+        try {
+            const response = await api.get('/api/submissions', { params });
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    getSubmissionStats: async () => {
+        try {
+            const response = await api.get('/api/submissions/stats/overview');
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
     }
-  }
 };
 
-// API Utilities
-export const apiUtils = {
-  formatErrorMessage: (error) => {
-    if (error.response?.data?.message) {
-      return error.response.data.message;
+// Compiler API
+export const compilerAPI = {
+    compileCode: async (codeData) => {
+        try {
+            const response = await api.post('/compile', codeData);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    getSupportedLanguages: async () => {
+        try {
+            const response = await api.get('/compile/languages');
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    getCompilerStats: async () => {
+        try {
+            const response = await api.get('/compile/stats');
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
     }
-    if (error.response?.data?.error) {
-      return error.response.data.error;
-    }
-    if (error.message) {
-      return error.message;
-    }
-    return 'An unexpected error occurred';
-  },
-
-  isNetworkError: (error) => {
-    return !error.response && error.code !== 'ECONNABORTED';
-  },
-
-  isTimeoutError: (error) => {
-    return error.code === 'ECONNABORTED';
-  },
-
-  // Helper to build query parameters
-  buildQueryParams: (params) => {
-    const queryParams = new URLSearchParams();
-    
-    Object.keys(params).forEach(key => {
-      if (params[key] !== null && params[key] !== undefined && params[key] !== '') {
-        queryParams.append(key, params[key].toString());
-      }
-    });
-    
-    return queryParams.toString();
-  },
-
-  // Helper to validate ObjectId format
-  isValidObjectId: (id) => {
-    return /^[0-9a-fA-F]{24}$/.test(id);
-  },
-
-  // Helper to handle API responses consistently
-  handleApiResponse: (response, defaultErrorMessage = 'Operation failed') => {
-    if (response.success) {
-      return response;
-    } else {
-      throw new Error(response.error || defaultErrorMessage);
-    }
-  },
-
-  // Helper to format dates
-  formatDate: (date) => {
-    return new Date(date).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  },
-
-  // Helper to format execution time
-  formatExecutionTime: (timeMs) => {
-    if (timeMs < 1000) return `${timeMs}ms`;
-    return `${(timeMs / 1000).toFixed(2)}s`;
-  },
-
-  // Helper to format memory usage
-  formatMemoryUsage: (bytes) => {
-    if (bytes < 1024) return `${bytes}B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
-  }
 };
 
-// Constants
-export const API_CONSTANTS = {
-  ADMIN_USER_ID: '68ad4516c3be4979ebac1d49',
-  DEFAULT_PAGE_SIZE: 10,
-  MAX_PAGE_SIZE: 100,
-  REQUEST_TIMEOUT: 30000,
-  SUPPORTED_LANGUAGES: ['javascript', 'python', 'java', 'cpp', 'c', 'go', 'ruby', 'php'],
-  PROBLEM_DIFFICULTIES: ['Easy', 'Medium', 'Hard'],
-  USER_ROLES: ['admin', 'student', 'client'],
-  CONTEST_STATUSES: ['Upcoming', 'Active', 'Completed', 'Cancelled'],
-  SUBMISSION_STATUSES: [
-    'pending', 'running', 'accepted', 'wrong_answer', 
-    'compilation_error', 'runtime_error', 'time_limit_exceeded', 'memory_limit_exceeded'
-  ],
-  DEPARTMENTS: ['AIML', 'CSE', 'IT', 'ECE', 'MECH', 'CIVIL'],
-  BATCHES: ['A1', 'B1', 'C1', 'D1', 'A2', 'B2', 'C2', 'D2', 'A3', 'B3', 'C3', 'D3', 'A4', 'B4', 'C4', 'D4']
+// Auto-save API
+export const autoSaveAPI = {
+    saveCode: async (autoSaveData) => {
+        try {
+            const response = await api.post('/api/autosave/save', autoSaveData);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    loadCode: async (userId, problemId, contestId = null) => {
+        try {
+            const params = contestId ? { contestId } : {};
+            const response = await api.get(`/api/autosave/load/${userId}/${problemId}`, { params });
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    getRestoreOptions: async (userId, problemId, contestId = null) => {
+        try {
+            const params = contestId ? { contestId } : {};
+            const response = await api.get(`/api/autosave/restore-options/${userId}/${problemId}`, { params });
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    loadLatestSubmission: async (userId, problemId, contestId = null) => {
+        try {
+            const params = contestId ? { contestId } : {};
+            const response = await api.get(`/api/autosave/submission/${userId}/${problemId}`, { params });
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    clearAutoSave: async (userId, problemId, contestId = null) => {
+        try {
+            const params = contestId ? { contestId } : {};
+            const response = await api.delete(`/api/autosave/clear/${userId}/${problemId}`, { params });
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    getUserAutoSaves: async (userId, params = {}) => {
+        try {
+            const response = await api.get(`/api/autosave/user/${userId}`, { params });
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    }
 };
 
 export default api;
