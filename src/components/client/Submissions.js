@@ -1,6 +1,6 @@
 // src/components/client/Submissions.js
 import React, { useState, useEffect } from 'react';
-import { HiDocumentText, HiFilter, HiCheckCircle, HiXCircle, HiClock, HiEye, HiRefresh, HiExclamation, HiCode, HiX } from 'react-icons/hi';
+import { HiDocumentText, HiFilter, HiCheckCircle, HiXCircle, HiClock,  HiRefresh, HiExclamation, HiCode, HiX } from 'react-icons/hi';
 import { authAPI, submissionsAPI } from '../../services/api';
 
 const Submissions = () => {
@@ -17,6 +17,9 @@ const Submissions = () => {
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [loadingCode, setLoadingCode] = useState(false);
 
+  // Auto-refresh interval
+  const [refreshInterval, setRefreshInterval] = useState(null);
+
   // Fetch user submissions
   const fetchSubmissions = async () => {
     try {
@@ -32,7 +35,6 @@ const Submissions = () => {
       
       console.log('🔄 Fetching submissions for user:', currentUser._id);
       
-      // Use the submissionsAPI instead of direct API call
       const response = await submissionsAPI.getUserSubmissions(currentUser._id, {
         page: 1,
         limit: 100
@@ -121,10 +123,38 @@ const Submissions = () => {
     setFilteredSubmissions(filtered);
   }, [submissions, statusFilter, languageFilter]);
 
-  // Fetch submissions on component mount
+  // Fetch submissions on component mount and set up auto-refresh
   useEffect(() => {
     fetchSubmissions();
+    
+    // Set up auto-refresh every 30 seconds for pending submissions
+    const interval = setInterval(() => {
+      const hasPendingSubmissions = submissions.some(s => 
+        s.status === 'pending' || s.status === 'running'
+      );
+      
+      if (hasPendingSubmissions) {
+        fetchSubmissions();
+      }
+    }, 30000); // 30 seconds
+    
+    setRefreshInterval(interval);
+    
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
   }, []);
+
+  // Clean up interval on unmount
+  useEffect(() => {
+    return () => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+    };
+  }, [refreshInterval]);
 
   // Convert backend status to display status
   const getDisplayStatus = (status) => {
@@ -150,8 +180,8 @@ const Submissions = () => {
       case 'Runtime Error': return <HiXCircle className="text-orange-400" />;
       case 'Compilation Error': return <HiXCircle className="text-red-400" />;
       case 'Memory Limit Exceeded': return <HiClock className="text-purple-400" />;
-      case 'Pending': return <HiClock className="text-gray-400" />;
-      case 'Running': return <HiClock className="text-blue-400" />;
+      case 'Pending': return <HiClock className="text-gray-400 animate-spin" />;
+      case 'Running': return <HiClock className="text-blue-400 animate-pulse" />;
       default: return <HiClock className="text-gray-400" />;
     }
   };
@@ -340,11 +370,30 @@ const Submissions = () => {
               </div>
             </div>
 
+            {/* Auto-refresh indicator */}
+            {submissions.some(s => s.status === 'pending' || s.status === 'running') && (
+              <div className="bg-blue-500/20 border border-blue-500/30 rounded-lg p-3 mb-6">
+                <div className="flex items-center space-x-2">
+                  <HiClock className="text-blue-400 animate-pulse" />
+                  <span className="text-blue-400 text-sm">
+                    Auto-refreshing submissions with pending results...
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Filters */}
             <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6 mb-8">
               <div className="flex items-center space-x-3 mb-4">
                 <HiFilter className="text-blue-400 text-xl" />
                 <h3 className="text-lg font-semibold text-white">Filter Submissions</h3>
+                <button
+                  onClick={fetchSubmissions}
+                  className="ml-auto flex items-center space-x-2 bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded-lg text-sm transition-colors"
+                >
+                  <HiRefresh className="text-sm" />
+                  <span>Refresh</span>
+                </button>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -404,6 +453,11 @@ const Submissions = () => {
                             <div className="text-white font-medium">
                               {getProblemTitle(submission.problemId)}
                             </div>
+                            {submission.contestId && (
+                              <div className="text-xs text-blue-400 mt-1">
+                                Contest: {submission.contestId.title || 'Unknown Contest'}
+                              </div>
+                            )}
                           </td>
                           <td className="px-6 py-4">
                             <div className={`inline-flex items-center space-x-2 px-3 py-1 rounded-full border text-sm font-medium ${getStatusColor(submission.status)}`}>
@@ -530,6 +584,38 @@ const Submissions = () => {
                     <code>{selectedSubmission.code || 'Code not available'}</code>
                   </pre>
                 </div>
+
+                {/* Test Case Results */}
+                {selectedSubmission.testCaseResults && selectedSubmission.testCaseResults.length > 0 && (
+                  <div className="mt-6">
+                    <h4 className="text-lg font-semibold text-white mb-4">Test Case Results</h4>
+                    <div className="space-y-3 max-h-64 overflow-y-auto">
+                      {selectedSubmission.testCaseResults.map((result, index) => (
+                        <div key={index} className="bg-gray-800 rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-gray-300">
+                              Test Case {index + 1}
+                            </span>
+                            <span className={`text-xs px-2 py-1 rounded ${
+                              result.status === 'passed' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                            }`}>
+                              {result.status}
+                            </span>
+                          </div>
+                          {result.status !== 'passed' && (
+                            <div className="text-xs text-gray-400 space-y-1">
+                              <div><strong>Expected:</strong> {result.expectedOutput}</div>
+                              <div><strong>Got:</strong> {result.actualOutput}</div>
+                              {result.errorMessage && (
+                                <div><strong>Error:</strong> {result.errorMessage}</div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Additional Information */}
                 <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
