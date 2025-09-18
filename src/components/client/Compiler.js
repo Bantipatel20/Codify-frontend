@@ -141,8 +141,7 @@ int main() {
         fetchSupportedLanguages();
         
         if (problem) {
-            fetchProblemData();
-            checkForRestoreOptions(user._id);
+            initializeProblemData();
         }
         
         return () => {
@@ -152,23 +151,68 @@ int main() {
         };
     }, [problem, navigate]);
 
-    // Fetch complete problem data from database
-    const fetchProblemData = async () => {
+    // Initialize problem data based on context (contest vs practice)
+    const initializeProblemData = async () => {
         try {
             setLoading(true);
-            const response = await problemsAPI.getProblemById(problem._id || problem.problemId);
-            
-            if (response.success) {
-                setProblemData(response.data);
-                // Fetch statistics
-                await fetchProblemStats(response.data._id);
+            console.log('🔄 Initializing problem data...', { problem, isContestMode });
+
+            let resolvedProblemData = null;
+
+            if (isContestMode) {
+                // For contest mode, use the problem data as-is from contest
+                console.log('📝 Contest mode: Using contest problem data');
+                resolvedProblemData = {
+                    _id: problem.problemId || problem._id,
+                    title: problem.title,
+                    description: problem.description || problem.manualProblem?.description || 'No description available for this contest problem.',
+                    difficulty: problem.difficulty || 'Medium',
+                    tags: problem.tags || [],
+                    testCases: problem.testCases || [],
+                    // Add sample input/output if available
+                    sampleInput: problem.manualProblem?.sampleInput || '',
+                    sampleOutput: problem.manualProblem?.sampleOutput || '',
+                    points: problem.points || 100,
+                    contestId: problem.contestId
+                };
+
+                // Create sample test cases from manual problem data if available
+                if (problem.manualProblem?.sampleInput && problem.manualProblem?.sampleOutput) {
+                    resolvedProblemData.testCases = [
+                        {
+                            input: problem.manualProblem.sampleInput,
+                            output: problem.manualProblem.sampleOutput
+                        }
+                    ];
+                }
             } else {
-                console.error('Failed to fetch problem data:', response.error);
-                setProblemData(problem); // Fallback to passed problem data
+                // For practice mode, fetch from database
+                console.log('🎯 Practice mode: Fetching from database');
+                const response = await problemsAPI.getProblemById(problem._id || problem.problemId);
+                
+                if (response.success) {
+                    resolvedProblemData = response.data;
+                } else {
+                    console.warn('Failed to fetch problem from database, using fallback data');
+                    resolvedProblemData = problem;
+                }
             }
+
+            console.log('✅ Problem data resolved:', resolvedProblemData);
+            setProblemData(resolvedProblemData);
+            
+            // Fetch statistics
+            await fetchProblemStats(resolvedProblemData._id);
+            
+            // Check for restore options
+            if (currentUser) {
+                await checkForRestoreOptions(currentUser._id, resolvedProblemData);
+            }
+            
         } catch (error) {
-            console.error('Error fetching problem data:', error);
-            setProblemData(problem); // Fallback to passed problem data
+            console.error('❌ Error initializing problem data:', error);
+            // Fallback to using passed problem data
+            setProblemData(problem);
         } finally {
             setLoading(false);
         }
@@ -220,25 +264,33 @@ int main() {
     };
 
     // Check for restore options
-    const checkForRestoreOptions = async (userId) => {
+    const checkForRestoreOptions = async (userId, problemData) => {
         try {
+            console.log('🔍 Checking restore options for:', { userId, problemId: problemData._id, contestId: problemData.contestId });
+            
             const response = await autoSaveAPI.getRestoreOptions(
                 userId, 
-                problem._id || problem.problemId,
-                problem.contestId
+                problemData._id,
+                problemData.contestId || null
             );
             
             if (response.success && response.data) {
                 const options = response.data;
+                console.log('📋 Restore options found:', options);
+                
                 if (options.hasAutoSave || options.hasLatestSubmission) {
                     setRestoreOptions(options);
                     setShowRestoreModal(true);
                 } else {
+                    console.log('🆕 No previous work found, starting fresh');
                     setCode(languageTemplates[language] || '');
                 }
+            } else {
+                console.log('🆕 No restore options available, starting fresh');
+                setCode(languageTemplates[language] || '');
             }
         } catch (error) {
-            console.error('Failed to check restore options:', error);
+            console.error('❌ Failed to check restore options:', error);
             setCode(languageTemplates[language] || '');
         }
     };
@@ -249,17 +301,23 @@ int main() {
 
         try {
             setAutoSaveStatus('Saving...');
+            console.log('💾 Performing auto-save...', {
+                userId: currentUser._id,
+                problemId: problemData._id,
+                contestId: problemData.contestId
+            });
             
             const autoSaveData = {
                 userId: currentUser._id,
                 problemId: problemData._id,
-                contestId: problem.contestId || null,
+                contestId: problemData.contestId || null,
                 code: code,
                 language: language,
                 metadata: {
                     cursorPosition: { line: 0, column: 0 },
                     scrollPosition: 0,
-                    fontSize: fontSize
+                    fontSize: fontSize,
+                    isContestMode: isContestMode
                 }
             };
 
@@ -268,23 +326,28 @@ int main() {
             if (response.success) {
                 setLastSaved(new Date());
                 setAutoSaveStatus('Saved');
+                console.log('✅ Auto-save successful');
                 setTimeout(() => setAutoSaveStatus(''), 2000);
+            } else {
+                throw new Error(response.error || 'Auto-save failed');
             }
         } catch (error) {
-            console.error('Auto-save failed:', error);
-            setAutoSaveStatus('Failed to save');
+            console.error('❌ Auto-save failed:', error);
+            setAutoSaveStatus('Save failed');
             setTimeout(() => setAutoSaveStatus(''), 3000);
         }
-    }, [currentUser, problemData, code, language, fontSize]);
+    }, [currentUser, problemData, code, language, fontSize, isContestMode]);
 
     // Handle restore option selection
     const handleRestore = async (option) => {
         try {
+            console.log('🔄 Restoring option:', option);
+            
             if (option === 'auto_save') {
                 const response = await autoSaveAPI.loadCode(
                     currentUser._id,
                     problemData._id,
-                    problem.contestId
+                    problemData.contestId || null
                 );
                 if (response.success) {
                     setCode(response.data.code);
@@ -292,22 +355,25 @@ int main() {
                     if (response.data.metadata) {
                         setFontSize(response.data.metadata.fontSize || 14);
                     }
+                    console.log('✅ Auto-save restored');
                 }
             } else if (option === 'latest_submission') {
                 const response = await autoSaveAPI.loadLatestSubmission(
                     currentUser._id,
                     problemData._id,
-                    problem.contestId
+                    problemData.contestId || null
                 );
                 if (response.success) {
                     setCode(response.data.code);
                     setLanguage(response.data.language);
+                    console.log('✅ Latest submission restored');
                 }
             } else {
                 setCode(languageTemplates[language] || '');
+                console.log('🆕 Started fresh');
             }
         } catch (error) {
-            console.error('Failed to restore code:', error);
+            console.error('❌ Failed to restore code:', error);
             setCode(languageTemplates[language] || '');
         } finally {
             setShowRestoreModal(false);
@@ -370,7 +436,7 @@ int main() {
         }
     };
 
-    // Test against sample test cases from database
+    // Test against sample test cases
     const handleTestCode = async () => {
         if (!code.trim()) {
             alert('Please enter some code first');
@@ -378,10 +444,25 @@ int main() {
         }
 
         if (!problemData.testCases || problemData.testCases.length === 0) {
-            alert('No test cases available for this problem');
+            // If no test cases available, create a basic test with sample input/output
+            if (problemData.sampleInput && problemData.sampleOutput) {
+                console.log('📝 Using sample input/output for testing');
+                const sampleTestCase = {
+                    input: problemData.sampleInput,
+                    output: problemData.sampleOutput
+                };
+                await runTestCases([sampleTestCase]);
+            } else {
+                alert('No test cases available for this problem');
+            }
             return;
         }
 
+        await runTestCases(problemData.testCases);
+    };
+
+    // Run test cases
+    const runTestCases = async (testCases) => {
         setIsTesting(true);
         setTestResults(null);
 
@@ -389,8 +470,8 @@ int main() {
             const results = [];
             
             // Test against first 3 test cases
-            for (let i = 0; i < Math.min(3, problemData.testCases.length); i++) {
-                const testCase = problemData.testCases[i];
+            for (let i = 0; i < Math.min(3, testCases.length); i++) {
+                const testCase = testCases[i];
                 
                 const response = await compilerAPI.compileCode({
                     code: code,
@@ -460,10 +541,12 @@ int main() {
             const submissionData = {
                 userId: currentUser._id,
                 problemId: problemData._id,
-                contestId: problem.contestId || null,
+                contestId: problemData.contestId || null,
                 code: code,
                 language: language
             };
+
+            console.log('📤 Submitting code:', submissionData);
 
             const response = await submissionsAPI.submitCode(submissionData);
             
@@ -478,12 +561,14 @@ int main() {
                 });
                 setShowSubmissionModal(true);
                 
+                // Clear auto-save after successful submission
                 try {
                     await autoSaveAPI.clearAutoSave(
                         currentUser._id,
                         problemData._id,
-                        problem.contestId
+                        problemData.contestId || null
                     );
+                    console.log('🧹 Auto-save cleared after submission');
                 } catch (clearError) {
                     console.error('Failed to clear auto-save:', clearError);
                 }
@@ -510,12 +595,15 @@ int main() {
         }
     };
 
-    if (loading || !problemData) {
+    if (loading) {
         return (
             <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white flex items-center justify-center">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
                     <p className="text-lg">Loading problem...</p>
+                    {isContestMode && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">Contest Mode</p>
+                    )}
                 </div>
             </div>
         );
@@ -529,10 +617,10 @@ int main() {
                     <h2 className="text-2xl font-bold mb-4">No Problem Selected</h2>
                     <p className="text-gray-600 dark:text-gray-400 mb-6">Please select a problem to start coding.</p>
                     <button 
-                        onClick={() => navigate('/client/practice')}
+                        onClick={() => navigate(isContestMode ? '/client/contests' : '/client/practice')}
                         className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-medium transition-colors"
                     >
-                        Browse Problems
+                        {isContestMode ? 'Browse Contests' : 'Browse Problems'}
                     </button>
                 </div>
             </div>
@@ -563,6 +651,12 @@ int main() {
                                     <>
                                         <span className="text-gray-400">•</span>
                                         <span className="text-blue-500">Contest Mode</span>
+                                        {problemData.points && (
+                                            <>
+                                                <span className="text-gray-400">•</span>
+                                                <span className="text-yellow-500">{problemData.points} pts</span>
+                                            </>
+                                        )}
                                     </>
                                 )}
                             </div>
@@ -579,6 +673,11 @@ int main() {
                                 }`}></div>
                                 <span className="text-gray-600 dark:text-gray-400">{autoSaveStatus}</span>
                             </div>
+                        )}
+                        {lastSaved && (
+                            <span className="text-xs text-gray-500">
+                                Saved {lastSaved.toLocaleTimeString()}
+                            </span>
                         )}
                     </div>
                 </div>
@@ -609,7 +708,7 @@ int main() {
                                         : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                 }`}
                             >
-                                Testcase
+                                Test Results
                                 {testResults && (
                                     <span className={`ml-2 w-2 h-2 rounded-full inline-block ${
                                         testResults.every(r => r.passed) ? 'bg-green-500' : 'bg-red-500'
@@ -623,13 +722,23 @@ int main() {
                     <div className="flex-1 overflow-y-auto p-6">
                         {activeTab === 'description' && (
                             <div className="space-y-6">
-                                {/* Problem Title and Stats - Removed Likes/Dislikes */}
+                                {/* Problem Title and Contest Info */}
                                 <div>
                                     <div className="flex items-center justify-between mb-4">
                                         <h2 className="text-2xl font-bold">{problemData.title}</h2>
+                                        {isContestMode && (
+                                            <div className="flex items-center space-x-2">
+                                                <span className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded text-sm">
+                                                    Contest
+                                                </span>
+                                                {problemData.points && (
+                                                    <span className="bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 px-2 py-1 rounded text-sm">
+                                                        {problemData.points} points
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
-                                    
-                                    
                                 </div>
 
                                 {/* Problem Description */}
@@ -639,11 +748,36 @@ int main() {
                                     </div>
                                 </div>
 
-                                {/* Examples from Database Test Cases */}
-                                {problemData.testCases && problemData.testCases.length > 0 && (
+                                {/* Examples from Sample Input/Output or Test Cases */}
+                                {(problemData.sampleInput && problemData.sampleOutput) || (problemData.testCases && problemData.testCases.length > 0) ? (
                                     <div className="space-y-4">
                                         <h3 className="text-lg font-semibold">Examples</h3>
-                                        {problemData.testCases.slice(0, 2).map((testCase, index) => (
+                                        
+                                        {/* Show sample input/output if available */}
+                                        {problemData.sampleInput && problemData.sampleOutput && (
+                                            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                                                <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">
+                                                    Example 1:
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <div>
+                                                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Input: </span>
+                                                        <code className="bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded text-sm">
+                                                            {problemData.sampleInput}
+                                                        </code>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Output: </span>
+                                                        <code className="bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded text-sm">
+                                                            {problemData.sampleOutput}
+                                                        </code>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Show test cases if available and no sample input/output */}
+                                        {(!problemData.sampleInput || !problemData.sampleOutput) && problemData.testCases && problemData.testCases.slice(0, 2).map((testCase, index) => (
                                             <div key={index} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
                                                 <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">
                                                     Example {index + 1}:
@@ -665,7 +799,16 @@ int main() {
                                             </div>
                                         ))}
                                     </div>
-                                )}                                
+                                ) : (
+                                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                                        <div className="flex items-center space-x-2">
+                                            <HiExclamation className="text-yellow-600 dark:text-yellow-400" />
+                                            <span className="text-yellow-800 dark:text-yellow-200 text-sm">
+                                                No examples available for this problem. Use the Test button to validate your solution.
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Related Topics from Database */}
                                 {problemData.tags && problemData.tags.length > 0 && (
@@ -677,6 +820,22 @@ int main() {
                                                     {topic}
                                                 </span>
                                             ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Contest specific info */}
+                                {isContestMode && (
+                                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                                        <div className="flex items-center space-x-2 mb-2">
+                                            <HiClock className="text-blue-600 dark:text-blue-400" />
+                                            <span className="font-medium text-blue-800 dark:text-blue-200">Contest Information</span>
+                                        </div>
+                                        <div className="text-sm text-blue-700 dark:text-blue-300">
+                                            <p>This problem is part of an ongoing contest. Your submission will be evaluated and scored.</p>
+                                            {problemData.points && (
+                                                <p className="mt-1">Points: <strong>{problemData.points}</strong></p>
+                                            )}
                                         </div>
                                     </div>
                                 )}
@@ -927,7 +1086,7 @@ int main() {
                         
                         <p className="text-gray-600 dark:text-gray-400 mb-6">
                             Are you sure you want to submit your solution for "{problemData.title}"? 
-                            This will be evaluated against all test cases.
+                            {isContestMode ? ' This submission will be scored for the contest.' : ' This will be evaluated against all test cases.'}
                         </p>
                         
                         <div className="flex space-x-3">
@@ -987,6 +1146,14 @@ int main() {
                                     <div className="font-medium">{submissionResult.memory}</div>
                                 </div>
                             </div>
+
+                            {isContestMode && problemData.points && (
+                                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                                    <div className="text-sm text-yellow-800 dark:text-yellow-200">
+                                        <strong>Contest Points:</strong> {problemData.points} (pending evaluation)
+                                    </div>
+                                </div>
+                            )}
                         </div>
                         
                         <div className="flex space-x-3">
