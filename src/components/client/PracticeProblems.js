@@ -1,13 +1,15 @@
 // src/components/client/PracticeProblems.js
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HiCode, HiFilter, HiSearch, HiPlay,  HiStar, HiRefresh } from 'react-icons/hi';
-import { problemsAPI } from '../../services/api'; // Import your API service
+import { HiCode, HiFilter, HiSearch, HiPlay, HiStar, HiRefresh, HiCheckCircle } from 'react-icons/hi';
+import { problemsAPI, submissionsAPI, authAPI } from '../../services/api';
 
 const PracticeProblems = () => {
   const navigate = useNavigate();
   const [problems, setProblems] = useState([]);
   const [filteredProblems, setFilteredProblems] = useState([]);
+  const [userSubmissions, setUserSubmissions] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -23,48 +25,73 @@ const PracticeProblems = () => {
   });
 
   useEffect(() => {
-    fetchProblems();
-    fetchTags();
+    initializeData();
   }, []);
 
   useEffect(() => {
     filterProblems();
   }, [problems, searchTerm, difficultyFilter, tagFilter]);
 
+  const initializeData = async () => {
+    try {
+      // Get current user
+      const user = authAPI.getCurrentUser();
+      if (!user) {
+        navigate('/login');
+        return;
+      }
+      setCurrentUser(user);
+
+      // Fetch problems and user submissions in parallel
+      await Promise.all([
+        fetchProblems(),
+        fetchUserSubmissions(user._id),
+        fetchTags()
+      ]);
+    } catch (error) {
+      console.error('Error initializing data:', error);
+      setError('Failed to initialize page data');
+    }
+  };
+
   const fetchProblems = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      // Use your API service instead of direct axios
       const response = await problemsAPI.getAllProblems({
         limit: 100,
         page: 1
       });
 
       if (response.success) {
-        const problemsData = response.data.map(problem => ({
-          ...problem,
-          solved: Math.random() > 0.7, // Mock solved status
-          attempts: Math.floor(Math.random() * 5)
-        }));
-        
-        setProblems(problemsData);
-        
-        // Calculate stats
-        const total = problemsData.length;
-        const solved = problemsData.filter(p => p.solved).length;
-        const easy = problemsData.filter(p => p.difficulty === 'Easy').length;
-        const medium = problemsData.filter(p => p.difficulty === 'Medium').length;
-        const hard = problemsData.filter(p => p.difficulty === 'Hard').length;
-        
-        setStats({ total, solved, easy, medium, hard });
+        setProblems(response.data);
       } else {
         throw new Error(response.error || 'Failed to fetch problems');
       }
     } catch (err) {
       console.error('Error fetching problems:', err);
       setError('Failed to load problems. Please make sure your backend server is running on port 5000.');
+    }
+  };
+
+  const fetchUserSubmissions = async (userId) => {
+    try {
+      const response = await submissionsAPI.getUserSubmissions(userId, {
+        page: 1,
+        limit: 1000 // Get all submissions to check solve status
+      });
+
+      if (response.success) {
+        setUserSubmissions(response.data || []);
+        console.log('✅ Loaded user submissions:', response.data?.length || 0);
+      } else {
+        console.warn('Failed to fetch user submissions:', response.error);
+        setUserSubmissions([]);
+      }
+    } catch (err) {
+      console.error('Error fetching user submissions:', err);
+      setUserSubmissions([]);
     } finally {
       setLoading(false);
     }
@@ -72,23 +99,45 @@ const PracticeProblems = () => {
 
   const fetchTags = async () => {
     try {
-      // Use your API service instead of direct axios
       const response = await problemsAPI.getAllTags();
       
       if (response.success && response.data) {
         setAvailableTags(['All', ...response.data]);
       } else {
-        // Fallback tags if API fails
         setAvailableTags(['All', 'Array', 'String', 'Hash Table', 'Dynamic Programming', 'Tree', 'Graph']);
       }
     } catch (err) {
       console.error('Error fetching tags:', err);
-      // Use fallback tags
       setAvailableTags(['All', 'Array', 'String', 'Hash Table', 'Dynamic Programming', 'Tree', 'Graph']);
     }
   };
 
-  // Rest of your component code remains the same...
+  // Check if user has solved a problem
+  const isProblemSolved = (problemId) => {
+    return userSubmissions.some(submission => 
+      (submission.problemId === problemId || submission.problemId?._id === problemId) && 
+      submission.status === 'accepted'
+    );
+  };
+
+  // Get user's best score for a problem
+  const getBestScore = (problemId) => {
+    const problemSubmissions = userSubmissions.filter(submission => 
+      submission.problemId === problemId || submission.problemId?._id === problemId
+    );
+    
+    if (problemSubmissions.length === 0) return 0;
+    
+    return Math.max(...problemSubmissions.map(s => s.score || 0));
+  };
+
+  // Get submission count for a problem
+  const getSubmissionCount = (problemId) => {
+    return userSubmissions.filter(submission => 
+      submission.problemId === problemId || submission.problemId?._id === problemId
+    ).length;
+  };
+
   const filterProblems = () => {
     let filtered = problems;
 
@@ -113,7 +162,24 @@ const PracticeProblems = () => {
       );
     }
 
-    setFilteredProblems(filtered);
+    // Add solve status to each problem
+    const enrichedProblems = filtered.map(problem => ({
+      ...problem,
+      solved: isProblemSolved(problem._id),
+      bestScore: getBestScore(problem._id),
+      attempts: getSubmissionCount(problem._id)
+    }));
+
+    setFilteredProblems(enrichedProblems);
+
+    // Calculate stats
+    const total = problems.length;
+    const solved = problems.filter(p => isProblemSolved(p._id)).length;
+    const easy = problems.filter(p => p.difficulty === 'Easy').length;
+    const medium = problems.filter(p => p.difficulty === 'Medium').length;
+    const hard = problems.filter(p => p.difficulty === 'Hard').length;
+    
+    setStats({ total, solved, easy, medium, hard });
   };
 
   const handleSolveProblem = (problem) => {
@@ -129,7 +195,6 @@ const PracticeProblems = () => {
     }
   };
 
-  // Enhanced error display with more debugging information
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 flex items-center justify-center">
@@ -145,7 +210,7 @@ const PracticeProblems = () => {
             </ul>
           </div>
           <button 
-            onClick={fetchProblems}
+            onClick={initializeData}
             className="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-xl transition-all duration-300 mx-auto"
           >
             <HiRefresh className="text-lg" />
@@ -156,7 +221,6 @@ const PracticeProblems = () => {
     );
   }
 
-  // Rest of your component JSX remains exactly the same...
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 flex items-center justify-center">
@@ -170,7 +234,6 @@ const PracticeProblems = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 p-8">
-      {/* Your existing JSX content remains exactly the same */}
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="text-center mb-12">
@@ -179,6 +242,11 @@ const PracticeProblems = () => {
           </div>
           <h1 className="text-5xl font-bold text-white mb-4">Practice Arena</h1>
           <p className="text-gray-300 text-xl">Sharpen your coding skills with challenging problems</p>
+          {currentUser && (
+            <p className="text-gray-400 text-sm mt-2">
+              Welcome back, {currentUser.username}! Keep up the great work! 🚀
+            </p>
+          )}
         </div>
 
         {/* Stats Overview */}
@@ -199,7 +267,7 @@ const PracticeProblems = () => {
                 <p className="text-gray-400 text-sm mb-1">Solved</p>
                 <p className="text-2xl font-bold text-green-400">{stats.solved}</p>
               </div>
-              <HiStar className="text-green-400 text-xl" />
+              <HiCheckCircle className="text-green-400 text-xl" />
             </div>
           </div>
 
@@ -298,7 +366,7 @@ const PracticeProblems = () => {
                   <div className="flex-1">
                     <div className="flex items-center space-x-4 mb-2">
                       <div className="flex items-center space-x-2">
-                        {problem.solved && <HiStar className="text-yellow-400" />}
+                        {problem.solved && <HiCheckCircle className="text-green-400 text-lg" />}
                         <h3 className={`text-lg font-semibold ${problem.solved ? 'text-green-400' : 'text-white'}`}>
                           {problem.title}
                         </h3>
@@ -306,6 +374,11 @@ const PracticeProblems = () => {
                       <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getDifficultyColor(problem.difficulty)}`}>
                         {problem.difficulty}
                       </span>
+                      {problem.solved && (
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30">
+                          ✅ Solved
+                        </span>
+                      )}
                     </div>
                     
                     <p className="text-sm text-gray-400 mb-3 line-clamp-2">
@@ -316,7 +389,9 @@ const PracticeProblems = () => {
                       <span>📈 {problem.totalSubmissions || 0} submissions</span>
                       <span>✅ {problem.successRate || 0}% success rate</span>
                       <span>🎯 {problem.attempts} attempts</span>
-                      {problem.solved && <span className="text-green-400">✅ Solved</span>}
+                      {problem.bestScore > 0 && (
+                        <span className="text-yellow-400">⭐ Best: {problem.bestScore}%</span>
+                      )}
                     </div>
                     
                     {problem.tags && problem.tags.length > 0 && (
@@ -337,7 +412,7 @@ const PracticeProblems = () => {
                     onClick={() => handleSolveProblem(problem)}
                     className={`flex items-center space-x-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 ${
                       problem.solved 
-                        ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' 
+                        ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30 border border-green-500/30' 
                         : 'bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:shadow-lg'
                     }`}
                   >
