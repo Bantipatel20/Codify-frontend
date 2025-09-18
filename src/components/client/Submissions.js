@@ -329,18 +329,7 @@ const Submissions = () => {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-indigo-900 to-purple-900 p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl mb-4">
-            <HiDocumentText className="text-2xl text-white" />
-          </div>
-          <h1 className="text-5xl font-bold text-white mb-4">My Submissions</h1>
-          <p className="text-gray-300 text-xl">Track your coding journey and progress</p>
-          {userProfile && (
-            <p className="text-gray-400 text-sm mt-2">
-              Welcome back, {userProfile.username}! You've made {submissions.length} submission{submissions.length !== 1 ? 's' : ''} so far! 🎯
-            </p>
-          )}
-        </div>
+       
 
         {submissions.length === 0 ? (
           <div className="text-center py-12">
