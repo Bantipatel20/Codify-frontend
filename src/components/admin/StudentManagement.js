@@ -1,6 +1,6 @@
 // src/components/admin/StudentManagement.js
 import React, { useState, useEffect } from 'react';
-import { HiUserGroup, HiPlus, HiSearch, HiPencil, HiTrash, HiEye, HiX, HiArrowLeft, HiUpload } from 'react-icons/hi';
+import { HiUserGroup, HiPlus, HiSearch, HiPencil, HiTrash, HiEye, HiX, HiArrowLeft, HiUpload, HiDownload } from 'react-icons/hi';
 import { userAPI } from '../../services/api';
 import * as XLSX from 'xlsx';
 
@@ -239,6 +239,95 @@ const StudentManagement = ({ onBack }) => {
     event.target.value = '';
   };
 
+  const handleDownloadTemplate = () => {
+    // Create sample data with the correct format
+    const templateData = [
+      {
+        'Name': 'Banti Patel',
+        'Email': '23cs058@charusat.edu.in',
+        'Username': '23cs058',
+        'Password': '201005',
+        'Student ID': '23CS058',
+        'Department': 'CSE',
+        'Batch': 'C1',
+        'Division': '1'
+      }
+    ];
+
+    // Create workbook and worksheet
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(templateData);
+
+    // Set column widths for better readability
+    const columnWidths = [
+      { wch: 20 }, // Name
+      { wch: 30 }, // Email
+      { wch: 15 }, // Username
+      { wch: 15 }, // Password
+      { wch: 15 }, // Student ID
+      { wch: 12 }, // Department
+      { wch: 10 }, // Batch
+      { wch: 10 }  // Division
+    ];
+    worksheet['!cols'] = columnWidths;
+
+    // Add the worksheet to workbook
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Students Template');
+
+    // Generate filename with current date
+    const currentDate = new Date().toISOString().split('T')[0];
+    const filename = `student_upload_template_${currentDate}.xlsx`;
+
+    // Download the file
+    XLSX.writeFile(workbook, filename);
+  };
+
+  const handleDownloadStudentData = () => {
+    if (filteredStudents.length === 0) {
+      alert('No students to export');
+      return;
+    }
+
+    // Format student data for export
+    const exportData = filteredStudents.map(student => ({
+      'Name': student.name,
+      'Email': student.email,
+      'Username': student.username,
+      'Student ID': student.student_id,
+      'Department': student.department,
+      'Batch': student.batch,
+      'Division': student.div,
+      'Created At': new Date(student.createdAt).toLocaleDateString()
+    }));
+
+    // Create workbook and worksheet
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+
+    // Set column widths
+    const columnWidths = [
+      { wch: 20 }, // Name
+      { wch: 30 }, // Email
+      { wch: 15 }, // Username
+      { wch: 15 }, // Student ID
+      { wch: 12 }, // Department
+      { wch: 10 }, // Batch
+      { wch: 10 }, // Division
+      { wch: 15 }  // Created At
+    ];
+    worksheet['!cols'] = columnWidths;
+
+    // Add the worksheet to workbook
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Students Data');
+
+    // Generate filename with current date
+    const currentDate = new Date().toISOString().split('T')[0];
+    const filename = `students_data_${currentDate}.xlsx`;
+
+    // Download the file
+    XLSX.writeFile(workbook, filename);
+  };
+
   const clearFilters = () => {
     setSearchTerm('');
     setDepartmentFilter('All');
@@ -430,6 +519,26 @@ const StudentManagement = ({ onBack }) => {
           </div>
 
           <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={handleDownloadTemplate}
+                className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
+                title="Download Template"
+              >
+                <HiDownload className="text-lg" />
+                <span>Template</span>
+              </button>
+              
+              <button
+                onClick={handleDownloadStudentData}
+                className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-colors"
+                title="Download Student Data"
+              >
+                <HiDownload className="text-lg" />
+                <span>Export Data</span>
+              </button>
+            </div>
+
             <div className="relative">
               <input
                 type="file"
