@@ -8,7 +8,6 @@ import {
     HiUpload, 
     HiBeaker, 
     HiCode,
-    HiX,
     HiCheck,
     HiExclamation,
     HiClock,
@@ -51,7 +50,12 @@ const Compiler = () => {
     const [submissionResult, setSubmissionResult] = useState(null);
     const [showSubmissionModal, setShowSubmissionModal] = useState(false);
     const [showSubmissionConfirm, setShowSubmissionConfirm] = useState(false);
-    const [testResults, setTestResults] = useState(null);
+    
+    // Updated test results state
+    const [sampleTestResults, setSampleTestResults] = useState(null);
+    const [allTestResults, setAllTestResults] = useState(null);
+    const [testResults, setTestResults] = useState(null); // For backward compatibility
+    const [testMode, setTestMode] = useState('sample');
     
     // UI State
     const [activeTab, setActiveTab] = useState('description');
@@ -168,8 +172,9 @@ int main() {
                     description: problem.description || problem.manualProblem?.description || 'No description available for this contest problem.',
                     difficulty: problem.difficulty || 'Medium',
                     tags: problem.tags || [],
-                    testCases: problem.testCases || [],
-                    // Add sample input/output if available
+                    // Separate normal and hidden test cases
+                    testCases: problem.testCases?.filter(tc => tc.type !== 'hidden') || [],
+                    hiddenTestCases: problem.testCases?.filter(tc => tc.type === 'hidden') || problem.hiddenTestCases || [],
                     sampleInput: problem.manualProblem?.sampleInput || '',
                     sampleOutput: problem.manualProblem?.sampleOutput || '',
                     points: problem.points || 100,
@@ -181,7 +186,8 @@ int main() {
                     resolvedProblemData.testCases = [
                         {
                             input: problem.manualProblem.sampleInput,
-                            output: problem.manualProblem.sampleOutput
+                            output: problem.manualProblem.sampleOutput,
+                            type: 'sample'
                         }
                     ];
                 }
@@ -191,14 +197,27 @@ int main() {
                 const response = await problemsAPI.getProblemById(problem._id || problem.problemId);
                 
                 if (response.success) {
-                    resolvedProblemData = response.data;
+                    resolvedProblemData = {
+                        ...response.data,
+                        // Separate test cases by type
+                        testCases: response.data.testCases?.filter(tc => tc.type !== 'hidden') || [],
+                        hiddenTestCases: response.data.testCases?.filter(tc => tc.type === 'hidden') || []
+                    };
                 } else {
                     console.warn('Failed to fetch problem from database, using fallback data');
-                    resolvedProblemData = problem;
+                    resolvedProblemData = {
+                        ...problem,
+                        testCases: problem.testCases?.filter(tc => tc.type !== 'hidden') || [],
+                        hiddenTestCases: problem.testCases?.filter(tc => tc.type === 'hidden') || []
+                    };
                 }
             }
 
-            console.log('✅ Problem data resolved:', resolvedProblemData);
+            console.log('✅ Problem data resolved:', {
+                ...resolvedProblemData,
+                normalTestCases: resolvedProblemData.testCases?.length || 0,
+                hiddenTestCases: resolvedProblemData.hiddenTestCases?.length || 0
+            });
             setProblemData(resolvedProblemData);
             
             // Fetch statistics
@@ -212,7 +231,11 @@ int main() {
         } catch (error) {
             console.error('❌ Error initializing problem data:', error);
             // Fallback to using passed problem data
-            setProblemData(problem);
+            setProblemData({
+                ...problem,
+                testCases: problem.testCases?.filter(tc => tc.type !== 'hidden') || [],
+                hiddenTestCases: problem.testCases?.filter(tc => tc.type === 'hidden') || []
+            });
         } finally {
             setLoading(false);
         }
@@ -436,41 +459,54 @@ int main() {
         }
     };
 
-    // Test against sample test cases
+    // Test against sample test cases only
     const handleTestCode = async () => {
         if (!code.trim()) {
             alert('Please enter some code first');
             return;
         }
 
-        if (!problemData.testCases || problemData.testCases.length === 0) {
-            // If no test cases available, create a basic test with sample input/output
-            if (problemData.sampleInput && problemData.sampleOutput) {
-                console.log('📝 Using sample input/output for testing');
-                const sampleTestCase = {
-                    input: problemData.sampleInput,
-                    output: problemData.sampleOutput
-                };
-                await runTestCases([sampleTestCase]);
-            } else {
-                alert('No test cases available for this problem');
-            }
+        // Get only normal/sample test cases (not hidden ones)
+        let testCasesToRun = [];
+        
+        if (problemData.testCases && problemData.testCases.length > 0) {
+            // Use first 3 normal test cases
+            testCasesToRun = problemData.testCases.slice(0, 3);
+        } else if (problemData.sampleInput && problemData.sampleOutput) {
+            // Fallback to sample input/output
+            testCasesToRun = [{
+                input: problemData.sampleInput,
+                output: problemData.sampleOutput,
+                type: 'sample'
+            }];
+        } else {
+            alert('No sample test cases available for testing');
             return;
         }
 
-        await runTestCases(problemData.testCases);
+        console.log('🧪 Running sample test cases:', testCasesToRun.length);
+        await runTestCases(testCasesToRun, 'sample');
     };
 
-    // Run test cases
-    const runTestCases = async (testCases) => {
-        setIsTesting(true);
-        setTestResults(null);
+    // Run test cases with mode specification
+    const runTestCases = async (testCases, mode = 'sample') => {
+        const isSampleMode = mode === 'sample';
+        
+        if (isSampleMode) {
+            setIsTesting(true);
+            setSampleTestResults(null);
+        } else {
+            setIsSubmitting(true);
+            setAllTestResults(null);
+        }
 
         try {
             const results = [];
+            const maxTests = isSampleMode ? Math.min(3, testCases.length) : testCases.length;
             
-            // Test against first 3 test cases
-            for (let i = 0; i < Math.min(3, testCases.length); i++) {
+            console.log(`🔄 Running ${maxTests} ${mode} test cases...`);
+            
+            for (let i = 0; i < maxTests; i++) {
                 const testCase = testCases[i];
                 
                 const response = await compilerAPI.compileCode({
@@ -492,7 +528,8 @@ int main() {
                         passed: passed,
                         error: null,
                         runtime: Math.floor(Math.random() * 100) + 'ms',
-                        memory: Math.floor(Math.random() * 50) + 10 + 'MB'
+                        memory: Math.floor(Math.random() * 50) + 10 + 'MB',
+                        type: testCase.type || 'normal'
                     });
                 } else {
                     results.push({
@@ -503,18 +540,31 @@ int main() {
                         passed: false,
                         error: response.error || 'Compilation failed',
                         runtime: 'N/A',
-                        memory: 'N/A'
+                        memory: 'N/A',
+                        type: testCase.type || 'normal'
                     });
                 }
             }
 
-            setTestResults(results);
-            setActiveTab('testcase');
+            if (isSampleMode) {
+                setSampleTestResults(results);
+                setTestResults(results); // For backward compatibility
+                setActiveTab('testcase');
+            } else {
+                setAllTestResults(results);
+            }
+            
+            console.log(`✅ ${mode} test cases completed:`, results);
+            
         } catch (error) {
-            console.error('Testing error:', error);
+            console.error(`❌ ${mode} testing error:`, error);
             alert(`Testing failed: ${error.message || 'Unknown error'}`);
         } finally {
-            setIsTesting(false);
+            if (isSampleMode) {
+                setIsTesting(false);
+            } else {
+                setIsSubmitting(false);
+            }
         }
     };
 
@@ -533,11 +583,29 @@ int main() {
         setShowSubmissionConfirm(true);
     };
 
+    // Handle confirmed submission with all test cases
     const handleConfirmSubmission = async () => {
         setShowSubmissionConfirm(false);
         setIsSubmitting(true);
 
         try {
+            // First, run all test cases (normal + hidden) for evaluation
+            const allTestCases = [
+                ...(problemData.testCases || []),
+                ...(problemData.hiddenTestCases || [])
+            ];
+
+            console.log('📤 Running full evaluation with all test cases:', {
+                normal: problemData.testCases?.length || 0,
+                hidden: problemData.hiddenTestCases?.length || 0,
+                total: allTestCases.length
+            });
+
+            if (allTestCases.length > 0) {
+                await runTestCases(allTestCases, 'all');
+            }
+
+            // Submit to backend
             const submissionData = {
                 userId: currentUser._id,
                 problemId: problemData._id,
@@ -546,18 +614,23 @@ int main() {
                 language: language
             };
 
-            console.log('📤 Submitting code:', submissionData);
+            console.log('📤 Submitting code to backend:', submissionData);
 
             const response = await submissionsAPI.submitCode(submissionData);
             
             if (response.success) {
+                const passedTests = allTestResults ? allTestResults.filter(r => r.passed).length : 0;
+                const totalTests = allTestResults ? allTestResults.length : allTestCases.length;
+                
                 setSubmissionResult({
                     submissionId: response.submissionId,
                     status: response.status,
-                    totalTestCases: response.totalTestCases,
+                    totalTestCases: totalTests,
+                    passedTestCases: passedTests,
                     message: response.message,
                     runtime: Math.floor(Math.random() * 100) + 'ms',
-                    memory: Math.floor(Math.random() * 50) + 10 + 'MB'
+                    memory: Math.floor(Math.random() * 50) + 10 + 'MB',
+                    score: isContestMode ? Math.floor((passedTests / totalTests) * (problemData.points || 100)) : null
                 });
                 setShowSubmissionModal(true);
                 
@@ -659,6 +732,18 @@ int main() {
                                         )}
                                     </>
                                 )}
+                                {/* Test case info */}
+                                {(problemData.testCases?.length > 0 || problemData.hiddenTestCases?.length > 0) && (
+                                    <>
+                                        <span className="text-gray-400">•</span>
+                                        <span className="text-green-500">{problemData.testCases?.length || 0} Sample</span>
+                                        {problemData.hiddenTestCases?.length > 0 && (
+                                            <>
+                                                <span className="text-purple-500">+ {problemData.hiddenTestCases.length} Hidden</span>
+                                            </>
+                                        )}
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -687,7 +772,7 @@ int main() {
             <div className="flex h-[calc(100vh-73px)]">
                 {/* Left Panel - Problem Description */}
                 <div className="w-1/2 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col">
-                    {/* Tabs - Only Description and Testcase */}
+                    {/* Tabs - Description and Test Results */}
                     <div className="flex border-b border-gray-200 dark:border-gray-700">
                         <button
                             onClick={() => setActiveTab('description')}
@@ -699,7 +784,7 @@ int main() {
                         >
                             Description
                         </button>
-                        {testResults && (
+                        {(sampleTestResults || allTestResults) && (
                             <button
                                 onClick={() => setActiveTab('testcase')}
                                 className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
@@ -708,10 +793,10 @@ int main() {
                                         : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                                 }`}
                             >
-                                Test Results
-                                {testResults && (
+                                {allTestResults ? 'Full Results' : 'Test Results'}
+                                {(sampleTestResults || allTestResults) && (
                                     <span className={`ml-2 w-2 h-2 rounded-full inline-block ${
-                                        testResults.every(r => r.passed) ? 'bg-green-500' : 'bg-red-500'
+                                        (sampleTestResults || allTestResults).every(r => r.passed) ? 'bg-green-500' : 'bg-red-500'
                                     }`}></span>
                                 )}
                             </button>
@@ -740,6 +825,30 @@ int main() {
                                         )}
                                     </div>
                                 </div>
+
+                                {/* Test Case Information */}
+                                {(problemData.testCases?.length > 0 || problemData.hiddenTestCases?.length > 0) && (
+                                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                                        <div className="flex items-center space-x-2 mb-2">
+                                            <HiBeaker className="text-blue-600 dark:text-blue-400" />
+                                            <span className="font-medium text-blue-800 dark:text-blue-200">Test Cases</span>
+                                        </div>
+                                        <div className="text-sm text-blue-700 dark:text-blue-300">
+                                            <p>
+                                                <strong>Sample Tests:</strong> {problemData.testCases?.length || 0} (visible when testing)
+                                            </p>
+                                            {problemData.hiddenTestCases?.length > 0 && (
+                                                <p>
+                                                    <strong>Hidden Tests:</strong> {problemData.hiddenTestCases.length} (run only on submission)
+                                                </p>
+                                            )}
+                                            <p className="mt-2 text-xs">
+                                                💡 Use "Test Samples" to check your solution against visible test cases. 
+                                                "Submit Solution" will evaluate against all test cases including hidden ones.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Problem Description */}
                                 <div className="prose dark:prose-invert max-w-none">
@@ -842,31 +951,55 @@ int main() {
                             </div>
                         )}
 
-                        {activeTab === 'testcase' && testResults && (
+                        {activeTab === 'testcase' && (sampleTestResults || allTestResults) && (
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between">
-                                    <h3 className="text-lg font-semibold">Test Results</h3>
+                                    <h3 className="text-lg font-semibold">
+                                        {allTestResults ? 'Full Evaluation Results' : 'Sample Test Results'}
+                                    </h3>
                                     <div className="flex items-center space-x-4 text-sm">
+                                        {allTestResults && (
+                                            <div className="flex items-center space-x-2">
+                                                <span className="text-blue-600">
+                                                    📊 {allTestResults.filter(r => r.type !== 'hidden').length} Sample
+                                                </span>
+                                                <span className="text-purple-600">
+                                                    🔒 {allTestResults.filter(r => r.type === 'hidden').length} Hidden
+                                                </span>
+                                            </div>
+                                        )}
                                         <span className="text-green-600">
-                                            ✓ {testResults.filter(r => r.passed).length} Passed
+                                            ✓ {(sampleTestResults || allTestResults).filter(r => r.passed).length} Passed
                                         </span>
                                         <span className="text-red-600">
-                                            ✗ {testResults.filter(r => !r.passed).length} Failed
+                                            ✗ {(sampleTestResults || allTestResults).filter(r => !r.passed).length} Failed
                                         </span>
                                     </div>
                                 </div>
                                 
                                 <div className="space-y-4">
-                                    {testResults.map((result, index) => (
+                                    {(sampleTestResults || allTestResults).map((result, index) => (
                                         <div key={index} className={`border rounded-lg p-4 ${
                                             result.passed 
                                                 ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20' 
                                                 : 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20'
                                         }`}>
                                             <div className="flex items-center justify-between mb-3">
-                                                <span className="font-medium">
-                                                    Test Case {result.testCase}
-                                                </span>
+                                                <div className="flex items-center space-x-2">
+                                                    <span className="font-medium">
+                                                        Test Case {result.testCase}
+                                                    </span>
+                                                    {result.type === 'hidden' && (
+                                                        <span className="bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 px-2 py-1 rounded text-xs">
+                                                            Hidden
+                                                        </span>
+                                                    )}
+                                                    {result.type === 'sample' && (
+                                                        <span className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded text-xs">
+                                                            Sample
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <div className="flex items-center space-x-4 text-sm">
                                                     <span className={result.passed ? 'text-green-600' : 'text-red-600'}>
                                                         {result.passed ? 'PASSED' : 'FAILED'}
@@ -884,13 +1017,13 @@ int main() {
                                                 <div>
                                                     <span className="font-medium text-gray-700 dark:text-gray-300">Input:</span>
                                                     <pre className="mt-1 bg-gray-100 dark:bg-gray-800 p-2 rounded text-xs overflow-x-auto">
-                                                        {result.input}
+                                                        {result.type === 'hidden' ? '[Hidden Input]' : result.input}
                                                     </pre>
                                                 </div>
                                                 <div>
                                                     <span className="font-medium text-gray-700 dark:text-gray-300">Expected:</span>
                                                     <pre className="mt-1 bg-gray-100 dark:bg-gray-800 p-2 rounded text-xs overflow-x-auto">
-                                                        {result.expectedOutput}
+                                                        {result.type === 'hidden' ? '[Hidden Output]' : result.expectedOutput}
                                                     </pre>
                                                 </div>
                                                 <div>
@@ -900,7 +1033,8 @@ int main() {
                                                             ? 'bg-green-100 dark:bg-green-800/20 text-green-800 dark:text-green-200'
                                                             : 'bg-red-100 dark:bg-red-800/20 text-red-800 dark:text-red-200'
                                                     }`}>
-                                                        {result.actualOutput || 'No output'}
+                                                        {result.type === 'hidden' && !result.passed ? '[Hidden - Check Failed]' : 
+                                                         result.actualOutput || 'No output'}
                                                     </pre>
                                                 </div>
                                                 {result.error && (
@@ -993,7 +1127,7 @@ int main() {
                         />
                     </div>
 
-                    {/* Action Buttons */}
+                    {/* Action Buttons and Console */}
                     <div className={`bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 ${
                         consoleCollapsed ? 'h-16' : 'h-80'
                     } transition-all duration-300`}>
@@ -1005,6 +1139,7 @@ int main() {
                                         onClick={handleCompileAndRun}
                                         disabled={isCompiling}
                                         className="flex items-center space-x-2 px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition-colors"
+                                        title="Run code with custom input"
                                     >
                                         <HiPlay className="text-sm" />
                                         <span>{isCompiling ? 'Running...' : 'Run'}</span>
@@ -1014,18 +1149,20 @@ int main() {
                                         onClick={handleTestCode}
                                         disabled={isTesting}
                                         className="flex items-center space-x-2 px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition-colors"
+                                        title="Run sample test cases only"
                                     >
                                         <HiBeaker className="text-sm" />
-                                        <span>{isTesting ? 'Testing...' : 'Test'}</span>
+                                        <span>{isTesting ? 'Testing...' : 'Test Samples'}</span>
                                     </button>
                                     
                                     <button
                                         onClick={handleSubmitClick}
                                         disabled={isSubmitting}
                                         className="flex items-center space-x-2 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg text-sm font-medium transition-colors"
+                                        title="Submit and run all test cases (including hidden)"
                                     >
                                         <HiUpload className="text-sm" />
-                                        <span>{isSubmitting ? 'Submitting...' : 'Submit'}</span>
+                                        <span>{isSubmitting ? 'Submitting...' : 'Submit Solution'}</span>
                                     </button>
                                 </div>
                             </div>
@@ -1072,7 +1209,6 @@ int main() {
                 </div>
             </div>
 
-            {/* All existing modals remain the same... */}
             {/* Submission Confirmation Modal */}
             {showSubmissionConfirm && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
@@ -1084,10 +1220,38 @@ int main() {
                             <h3 className="text-lg font-semibold">Submit Solution</h3>
                         </div>
                         
-                        <p className="text-gray-600 dark:text-gray-400 mb-6">
-                            Are you sure you want to submit your solution for "{problemData.title}"? 
-                            {isContestMode ? ' This submission will be scored for the contest.' : ' This will be evaluated against all test cases.'}
-                        </p>
+                        <div className="mb-4">
+                            <p className="text-gray-600 dark:text-gray-400 mb-3">
+                                Are you sure you want to submit your solution for "{problemData.title}"?
+                            </p>
+                            
+                            {/* Test case breakdown */}
+                            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 text-sm">
+                                <div className="font-medium mb-2">Your submission will be evaluated against:</div>
+                                <div className="space-y-1">
+                                    <div className="flex justify-between">
+                                        <span>Sample test cases:</span>
+                                        <span className="text-green-600">{problemData.testCases?.length || 0}</span>
+                                    </div>
+                                    {problemData.hiddenTestCases?.length > 0 && (
+                                        <div className="flex justify-between">
+                                            <span>Hidden test cases:</span>
+                                            <span className="text-purple-600">{problemData.hiddenTestCases.length}</span>
+                                        </div>
+                                    )}
+                                    <div className="border-t pt-1 mt-2 flex justify-between font-medium">
+                                        <span>Total test cases:</span>
+                                        <span>{(problemData.testCases?.length || 0) + (problemData.hiddenTestCases?.length || 0)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {isContestMode && (
+                                <p className="text-blue-600 dark:text-blue-400 text-sm mt-3">
+                                    This submission will be scored for the contest.
+                                </p>
+                            )}
+                        </div>
                         
                         <div className="flex space-x-3">
                             <button
@@ -1112,10 +1276,24 @@ int main() {
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
                     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
                         <div className="text-center mb-6">
-                            <div className="w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <HiCheck className="text-2xl text-green-600 dark:text-green-400" />
+                            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
+                                submissionResult.passedTestCases === submissionResult.totalTestCases
+                                    ? 'bg-green-100 dark:bg-green-900'
+                                    : submissionResult.passedTestCases > 0
+                                    ? 'bg-yellow-100 dark:bg-yellow-900'
+                                    : 'bg-red-100 dark:bg-red-900'
+                            }`}>
+                                {submissionResult.passedTestCases === submissionResult.totalTestCases ? (
+                                    <HiCheck className="text-2xl text-green-600 dark:text-green-400" />
+                                ) : (
+                                    <HiExclamation className="text-2xl text-yellow-600 dark:text-yellow-400" />
+                                )}
                             </div>
-                            <h3 className="text-xl font-semibold mb-2">Submission Received!</h3>
+                            <h3 className="text-xl font-semibold mb-2">
+                                {submissionResult.passedTestCases === submissionResult.totalTestCases 
+                                    ? 'All Tests Passed!' 
+                                    : 'Submission Received'}
+                            </h3>
                             <p className="text-gray-600 dark:text-gray-400">{submissionResult.message}</p>
                         </div>
                         
@@ -1127,12 +1305,17 @@ int main() {
                             
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-                                    <div className="text-sm text-gray-600 dark:text-gray-400">Status</div>
-                                    <div className="font-medium capitalize">{submissionResult.status}</div>
+                                    <div className="text-sm text-gray-600 dark:text-gray-400">Test Results</div>
+                                    <div className="font-medium">
+                                        {submissionResult.passedTestCases}/{submissionResult.totalTestCases} Passed
+                                    </div>
+                                    <div className="text-xs text-gray-500 mt-1">
+                                        {Math.round((submissionResult.passedTestCases / submissionResult.totalTestCases) * 100)}% Success Rate
+                                    </div>
                                 </div>
                                 <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-                                    <div className="text-sm text-gray-600 dark:text-gray-400">Test Cases</div>
-                                    <div className="font-medium">{submissionResult.totalTestCases}</div>
+                                    <div className="text-sm text-gray-600 dark:text-gray-400">Status</div>
+                                    <div className="font-medium capitalize">{submissionResult.status}</div>
                                 </div>
                             </div>
                             
@@ -1147,10 +1330,10 @@ int main() {
                                 </div>
                             </div>
 
-                            {isContestMode && problemData.points && (
+                            {isContestMode && submissionResult.score !== null && (
                                 <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
                                     <div className="text-sm text-yellow-800 dark:text-yellow-200">
-                                        <strong>Contest Points:</strong> {problemData.points} (pending evaluation)
+                                        <strong>Contest Score:</strong> {submissionResult.score}/{problemData.points} points
                                     </div>
                                 </div>
                             )}
@@ -1164,10 +1347,15 @@ int main() {
                                 Continue Coding
                             </button>
                             <button
-                                onClick={() => navigate('/client/submissions')}
+                                onClick={() => {
+                                    setShowSubmissionModal(false);
+                                    if (allTestResults) {
+                                        setActiveTab('testcase');
+                                    }
+                                }}
                                 className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
                             >
-                                View Submissions
+                                View Results
                             </button>
                         </div>
                     </div>
