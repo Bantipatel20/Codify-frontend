@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { HiArrowLeft, HiStar, HiCalendar, HiClock, HiUsers, HiPlay, HiEye } from 'react-icons/hi';
-import { contestAPI } from '../../services/api';
+import { contestAPI, authAPI } from '../../services/api';
 
 const ContestDetails = () => {
   const { id } = useParams();
@@ -12,6 +12,76 @@ const ContestDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
+  const [userProfile, setUserProfile] = useState(null);
+  const [isEligible, setIsEligible] = useState(false);
+  const [isRegistered, setIsRegistered] = useState(false);
+
+  const fetchUserProfile = useCallback(async () => {
+    try {
+      const currentUser = authAPI.getCurrentUser();
+      if (currentUser) {
+        setUserProfile(currentUser);
+      }
+    } catch (err) {
+      console.error('Error fetching user profile:', err);
+    }
+  }, []);
+
+  const checkEligibility = useCallback((contest, userProfile) => {
+    if (!userProfile) return false;
+
+    // If manual selection, allow all authenticated users
+    if (contest.participantSelection === 'manual') {
+      return true;
+    }
+
+    // For automatic selection, check filter criteria
+    if (contest.participantSelection === 'automatic' && contest.filterCriteria) {
+      const criteria = contest.filterCriteria;
+      
+      // Check each criterion - ALL specified criteria must match for eligibility
+      if (criteria.department && criteria.department.length > 0) {
+        const userDept = userProfile.department;
+        const allowedDepts = Array.isArray(criteria.department) ? criteria.department : [criteria.department];
+        if (!allowedDepts.includes(userDept)) {
+          return false;
+        }
+      }
+      
+      if (criteria.semester && criteria.semester.length > 0) {
+        const userSem = userProfile.semester;
+        const allowedSems = Array.isArray(criteria.semester) ? criteria.semester : [criteria.semester];
+        if (!allowedSems.includes(userSem)) {
+          return false;
+        }
+      }
+      
+      if (criteria.division && criteria.division.length > 0) {
+        const userDiv = userProfile.division;
+        const allowedDivs = Array.isArray(criteria.division) ? criteria.division : [criteria.division];
+        if (!allowedDivs.includes(userDiv)) {
+          return false;
+        }
+      }
+      
+      if (criteria.batch && criteria.batch.length > 0) {
+        const userBatch = userProfile.batch;
+        const allowedBatches = Array.isArray(criteria.batch) ? criteria.batch : [criteria.batch];
+        if (!allowedBatches.includes(userBatch)) {
+          return false;
+        }
+      }
+    }
+    
+    return true;
+  }, []);
+
+  const checkRegistration = useCallback((contest, userProfile) => {
+    if (!userProfile) return false;
+    return contest.participants?.some(p => 
+      (typeof p === 'object' ? p.userId : p) === userProfile._id
+    );
+  }, []);
 
   const fetchContestDetails = useCallback(async () => {
     try {
@@ -20,6 +90,14 @@ const ContestDetails = () => {
       const response = await contestAPI.getContestById(id);
       if (response.success) {
         setContest(response.data);
+        
+        // Check eligibility and registration
+        if (userProfile) {
+          const eligible = checkEligibility(response.data, userProfile);
+          const registered = checkRegistration(response.data, userProfile);
+          setIsEligible(eligible);
+          setIsRegistered(registered);
+        }
       } else {
         throw new Error(response.error || 'Failed to fetch contest details');
       }
@@ -29,7 +107,7 @@ const ContestDetails = () => {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, userProfile, checkEligibility, checkRegistration]);
 
   const fetchLeaderboard = useCallback(async () => {
     try {
@@ -44,9 +122,36 @@ const ContestDetails = () => {
   }, [id]);
 
   useEffect(() => {
-    fetchContestDetails();
-    fetchLeaderboard();
-  }, [fetchContestDetails, fetchLeaderboard]);
+    fetchUserProfile();
+  }, [fetchUserProfile]);
+
+  useEffect(() => {
+    if (userProfile !== null) {
+      fetchContestDetails();
+      fetchLeaderboard();
+    }
+  }, [fetchContestDetails, fetchLeaderboard, userProfile]);
+
+  const handleRegister = async () => {
+    try {
+      if (!userProfile) {
+        alert('Please log in to register for contests');
+        return;
+      }
+
+      const response = await contestAPI.registerParticipant(id, userProfile._id);
+
+      if (response.success) {
+        alert('Successfully registered for contest!');
+        fetchContestDetails(); // Refresh to update registration status
+      } else {
+        throw new Error(response.error || 'Failed to register for contest');
+      }
+    } catch (err) {
+      console.error('Error registering for contest:', err);
+      alert(err.message || 'Failed to register for contest');
+    }
+  };
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -65,6 +170,15 @@ const ContestDetails = () => {
       case 'Hard': return 'text-red-400 bg-red-500/20';
       default: return 'text-gray-400 bg-gray-500/20';
     }
+  };
+
+  const handleViewProblem = (problem) => {
+    navigate('/client/practice/compiler', { 
+      state: { 
+        problem: { ...problem, contestId: contest._id },
+        isContestMode: true 
+      } 
+    });
   };
 
   if (loading) {
@@ -104,6 +218,36 @@ const ContestDetails = () => {
           <button 
             onClick={() => navigate('/client/contests')}
             className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-xl transition-all duration-300"
+          >
+            Back to Contests
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show eligibility message if user is not eligible
+  if (userProfile && !isEligible) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="text-yellow-400 text-4xl mb-4">🚫</div>
+          <h2 className="text-2xl font-bold text-white mb-4">Not Eligible</h2>
+          <p className="text-gray-300 text-lg mb-6">
+            You don't meet the eligibility criteria for this contest.
+          </p>
+          <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl p-4 mb-6">
+            <h3 className="text-white font-semibold mb-2">Your Profile:</h3>
+            <div className="text-gray-300 text-sm space-y-1">
+              <p>Department: {userProfile.department}</p>
+              <p>Semester: {userProfile.semester}</p>
+              <p>Division: {userProfile.division}</p>
+              <p>Batch: {userProfile.batch}</p>
+            </div>
+          </div>
+          <button 
+            onClick={() => navigate('/client/contests')}
+            className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-xl transition-all duration-300"
           >
             Back to Contests
           </button>
@@ -172,15 +316,33 @@ const ContestDetails = () => {
               </div>
             </div>
             
-            {contest.status === 'Active' && (
-              <button 
-                onClick={() => navigate(`/client/contests/${contest._id}/participate`)}
-                className="flex items-center space-x-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-4 rounded-xl font-medium transition-all duration-300 transform hover:scale-105"
-              >
-                <HiPlay className="text-xl" />
-                <span>Participate Now</span>
-              </button>
-            )}
+            <div className="flex flex-col space-y-3">
+              {contest.status === 'Active' && isRegistered && (
+                <button 
+                  onClick={() => navigate(`/client/contests/${contest._id}/participate`)}
+                  className="flex items-center space-x-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-4 rounded-xl font-medium transition-all duration-300 transform hover:scale-105"
+                >
+                  <HiPlay className="text-xl" />
+                  <span>Participate Now</span>
+                </button>
+              )}
+              
+              {contest.status === 'Upcoming' && !isRegistered && isEligible && (
+                <button 
+                  onClick={handleRegister}
+                  className="flex items-center space-x-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-8 py-4 rounded-xl font-medium transition-all duration-300 transform hover:scale-105"
+                >
+                  <HiUsers className="text-xl" />
+                  <span>Register</span>
+                </button>
+              )}
+              
+              {isRegistered && (
+                <div className="bg-green-500/20 text-green-400 px-4 py-2 rounded-xl text-center border border-green-500/30">
+                  ✓ Registered
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -235,7 +397,7 @@ const ContestDetails = () => {
                     <div className="bg-gray-800/50 rounded-xl p-4">
                       <h4 className="font-medium text-white mb-2">Registration</h4>
                       <p className="text-gray-300 text-sm">
-                        {contest.participantSelection === 'manual' ? 'Open to all students' : 'Filtered by criteria'}
+                        {contest.participantSelection === 'manual' ? 'Open to all eligible students' : 'Filtered by criteria'}
                       </p>
                     </div>
                     <div className="bg-gray-800/50 rounded-xl p-4">
@@ -306,12 +468,13 @@ const ContestDetails = () => {
                             {problem.solvedCount > 0 && (
                               <span>✅ {problem.solvedCount} solved</span>
                             )}
+                            {problem.problemId && problem.problemId.startsWith('manual_') && (
+                              <span className="bg-purple-500/20 text-purple-400 px-2 py-1 rounded text-xs">Manual Problem</span>
+                            )}
                           </div>
                         </div>
                         <button 
-                          onClick={() => navigate('/client/practice/compiler', { 
-                            state: { problem: { ...problem, contestId: contest._id } } 
-                          })}
+                          onClick={() => handleViewProblem(problem)}
                           className="flex items-center space-x-2 bg-blue-500/20 text-blue-400 px-4 py-2 rounded-lg hover:bg-blue-500/30 transition-all duration-300"
                         >
                           <HiEye className="text-sm" />
