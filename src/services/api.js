@@ -118,6 +118,33 @@ export const userAPI = {
         } catch (error) {
             throw error.response?.data || error;
         }
+    },
+
+    getDepartments: async () => {
+        try {
+            const response = await api.get('/users/meta/departments');
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    getBatches: async () => {
+        try {
+            const response = await api.get('/users/meta/batches');
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    getDivisions: async () => {
+        try {
+            const response = await api.get('/users/meta/divisions');
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
     }
 };
 
@@ -237,6 +264,24 @@ export const contestAPI = {
     registerParticipant: async (contestId, userId) => {
         try {
             const response = await api.post(`/api/contests/${contestId}/register`, { userId });
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    registerManualStudents: async (contestId, studentIds) => {
+        try {
+            const response = await api.post(`/api/contests/${contestId}/register-manual`, { studentIds });
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    getAvailableStudents: async (contestId) => {
+        try {
+            const response = await api.get(`/api/contests/${contestId}/available-students`);
             return response.data;
         } catch (error) {
             throw error.response?.data || error;
