@@ -17,6 +17,7 @@ const Contests = () => {
     try {
       const currentUser = authAPI.getCurrentUser();
       if (currentUser) {
+        console.log('User profile loaded:', currentUser);
         setUserProfile(currentUser);
       }
     } catch (err) {
@@ -28,11 +29,13 @@ const Contests = () => {
   const checkEligibility = useCallback((contest) => {
     // If no user profile, don't show any contests
     if (!userProfile) {
+      console.log('No user profile, hiding contest:', contest.title);
       return false;
     }
 
     // If manual selection, allow all authenticated users
     if (contest.participantSelection === 'manual') {
+      console.log('Manual selection contest, showing:', contest.title);
       return true;
     }
 
@@ -40,57 +43,64 @@ const Contests = () => {
     if (contest.participantSelection === 'automatic' && contest.filterCriteria) {
       const criteria = contest.filterCriteria;
       
-      // Check each criterion - ALL specified criteria must match for eligibility
-      if (criteria.department && criteria.department.length > 0) {
+      console.log('Checking eligibility for contest:', contest.title);
+      console.log('User profile:', userProfile);
+      console.log('Contest criteria:', criteria);
+      
+      // Check department
+      if (criteria.department && criteria.department.trim() !== '') {
         const userDept = userProfile.department;
-        const allowedDepts = Array.isArray(criteria.department) ? criteria.department : [criteria.department];
+        const allowedDepts = Array.isArray(criteria.department) 
+          ? criteria.department 
+          : [criteria.department];
+        
         if (!allowedDepts.includes(userDept)) {
+          console.log(`Department mismatch: user(${userDept}) not in allowed(${allowedDepts})`);
           return false;
         }
       }
       
-      if (criteria.semester && criteria.semester.length > 0) {
-        const userSem = userProfile.semester;
-        const allowedSems = Array.isArray(criteria.semester) ? criteria.semester : [criteria.semester];
+      // Check semester
+      if (criteria.semester && criteria.semester !== '') {
+        const userSem = parseInt(userProfile.semester);
+        const allowedSems = Array.isArray(criteria.semester) 
+          ? criteria.semester.map(s => parseInt(s))
+          : [parseInt(criteria.semester)];
+        
         if (!allowedSems.includes(userSem)) {
+          console.log(`Semester mismatch: user(${userSem}) not in allowed(${allowedSems})`);
           return false;
         }
       }
       
-      if (criteria.division && criteria.division.length > 0) {
-        const userDiv = userProfile.division;
-        const allowedDivs = Array.isArray(criteria.division) ? criteria.division : [criteria.division];
+      // Check division  
+      if (criteria.division && criteria.division !== '') {
+        const userDiv = parseInt(userProfile.div); // Note: using 'div' from user model
+        const allowedDivs = Array.isArray(criteria.division) 
+          ? criteria.division.map(d => parseInt(d))
+          : [parseInt(criteria.division)];
+        
         if (!allowedDivs.includes(userDiv)) {
+          console.log(`Division mismatch: user(${userDiv}) not in allowed(${allowedDivs})`);
           return false;
         }
       }
       
-      if (criteria.batch && criteria.batch.length > 0) {
+      // Check batch
+      if (criteria.batch && criteria.batch.trim() !== '') {
         const userBatch = userProfile.batch;
-        const allowedBatches = Array.isArray(criteria.batch) ? criteria.batch : [criteria.batch];
+        const allowedBatches = Array.isArray(criteria.batch) 
+          ? criteria.batch 
+          : [criteria.batch];
+        
         if (!allowedBatches.includes(userBatch)) {
-          return false;
-        }
-      }
-
-      // Additional criteria checks
-      if (criteria.year && criteria.year.length > 0) {
-        const userYear = userProfile.year;
-        const allowedYears = Array.isArray(criteria.year) ? criteria.year : [criteria.year];
-        if (!allowedYears.includes(userYear)) {
-          return false;
-        }
-      }
-
-      if (criteria.section && criteria.section.length > 0) {
-        const userSection = userProfile.section;
-        const allowedSections = Array.isArray(criteria.section) ? criteria.section : [criteria.section];
-        if (!allowedSections.includes(userSection)) {
+          console.log(`Batch mismatch: user(${userBatch}) not in allowed(${allowedBatches})`);
           return false;
         }
       }
     }
     
+    console.log('Contest eligible:', contest.title);
     return true;
   }, [userProfile]);
 
@@ -241,6 +251,19 @@ const Contests = () => {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 p-8">
       <div className="max-w-7xl mx-auto">
         
+        {/* Header */}
+        <div className="text-center mb-12">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-2xl mb-4">
+            <HiStar className="text-2xl text-white" />
+          </div>
+          <h1 className="text-5xl font-bold text-white mb-4">Programming Contests</h1>
+          <p className="text-gray-300 text-xl">Compete with peers and showcase your skills</p>
+          {userProfile && (
+            <p className="text-gray-400 text-sm mt-2">
+              Showing contests for: {userProfile.department} - Sem {userProfile.semester} - Div {userProfile.div} - Batch {userProfile.batch}
+            </p>
+          )}
+        </div>
 
         {/* Contests List */}
         <div className="space-y-6">
@@ -386,7 +409,7 @@ const Contests = () => {
             </p>
             {userProfile && contests.length > 0 && (
               <div className="mt-4 text-sm text-gray-500">
-                <p>Your profile: {userProfile.department} - {userProfile.semester} - {userProfile.division} - {userProfile.batch}</p>
+                <p>Your profile: {userProfile.department} - Sem {userProfile.semester} - Div {userProfile.div} - Batch {userProfile.batch}</p>
               </div>
             )}
           </div>
