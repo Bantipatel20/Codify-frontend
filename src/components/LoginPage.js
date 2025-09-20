@@ -1,7 +1,8 @@
 // src/components/LoginPage.js
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HiCode, HiUser, HiLockClosed, HiEye, HiEyeOff } from 'react-icons/hi';
+import { HiCode, HiUser, HiLockClosed, HiEye, HiEyeOff, HiExclamationCircle } from 'react-icons/hi';
+import { authAPI } from '../services/api';
 
 const LoginPage = () => {
     const [username, setUsername] = useState('');
@@ -20,51 +21,42 @@ const LoginPage = () => {
         setIsLoading(true);
 
         try {
-            console.log('🔄 Attempting login...');
+            console.log('🔄 Attempting login with authAPI...');
             
-            // Use direct backend URL to bypass proxy issues
-            const response = await fetch('http://localhost:5000/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    username: username,
-                    password: password
-                })
+            const response = await authAPI.login({
+                username: username.trim(),
+                password: password
             });
 
-            console.log('📡 Response status:', response.status);
+            console.log('✅ Login response:', response);
 
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const data = await response.json();
-            console.log('✅ Login response:', data);
-
-            if (data.success) {
+            if (response.success) {
                 // Store user information
                 localStorage.setItem('currentUser', username);
-                localStorage.setItem('userId', data.userId);
+                localStorage.setItem('userId', response.userId);
                 
                 const userData = {
-                    _id: data.userId,
-                    name: data.name || username,
-                    email: `${username}@example.com`,
+                    _id: response.userId,
+                    name: response.name || username,
+                    email: response.email || `${username}@example.com`,
                     username: username,
-                    role: data.role
+                    role: response.role,
+                    department: response.department,
+                    semester: response.semester,
+                    div: response.div,
+                    batch: response.batch,
+                    student_id: response.student_id
                 };
                 
                 localStorage.setItem('user', JSON.stringify(userData));
                 localStorage.setItem('token', btoa(JSON.stringify(userData)));
                 
-                console.log('🔍 User ID from response:', data.userId);
+                console.log('🔍 User ID from response:', response.userId);
                 console.log('🔍 Admin ID for comparison:', ADMIN_USER_ID);
-                console.log('🔍 Is Admin?', data.userId === ADMIN_USER_ID);
+                console.log('🔍 Is Admin?', response.userId === ADMIN_USER_ID);
                 
                 // Navigate based on user ID
-                if (data.userId === ADMIN_USER_ID) {
+                if (response.userId === ADMIN_USER_ID) {
                     console.log('✅ Navigating to admin dashboard');
                     navigate('/admin/dashboard');
                 } else {
@@ -72,19 +64,71 @@ const LoginPage = () => {
                     navigate('/client/practice');
                 }
             } else {
-                setError(data.error || 'Login failed');
+                setError(response.error || response.message || 'Login failed. Please try again.');
             }
         } catch (error) {
             console.error('❌ Login error:', error);
             
-            if (error.message.includes('Failed to fetch')) {
-                setError('Cannot connect to backend server. Make sure it\'s running on port 5000.');
-            } else {
-                setError(`Login failed: ${error.message}`);
+            // Handle different types of errors
+            let errorMessage = 'An unexpected error occurred. Please try again.';
+            
+            if (error.response) {
+                // Server responded with error status
+                const status = error.response.status;
+                const errorData = error.response.data;
+                
+                switch (status) {
+                    case 400:
+                        errorMessage = 'Please enter both username and password.';
+                        break;
+                    case 401:
+                        errorMessage = 'Invalid username or password. Please check your credentials and try again.';
+                        break;
+                    case 404:
+                        errorMessage = 'User not found. Please check your username and try again.';
+                        break;
+                    case 500:
+                        errorMessage = 'Server error. Please try again later or contact support.';
+                        break;
+                    default:
+                        errorMessage = errorData?.error || errorData?.message || `Server error (${status}). Please try again.`;
+                }
+            } else if (error.request) {
+                // Network error
+                errorMessage = 'Cannot connect to server. Please check your internet connection and ensure the server is running.';
+            } else if (error.message) {
+                // Other errors
+                if (error.message.includes('timeout')) {
+                    errorMessage = 'Request timed out. Please check your connection and try again.';
+                } else if (error.message.includes('Network Error')) {
+                    errorMessage = 'Network error. Please check your internet connection.';
+                } else {
+                    errorMessage = error.message;
+                }
             }
+            
+            // Handle specific API error formats
+            if (error.error) {
+                errorMessage = error.error;
+            } else if (error.message && !error.response && !error.request) {
+                errorMessage = error.message;
+            }
+            
+            setError(errorMessage);
         }
         
         setIsLoading(false);
+    };
+
+    // Clear error when user starts typing
+    const handleUsernameChange = (e) => {
+        setUsername(e.target.value);
+        if (error) setError('');
+    };
+
+    const handlePasswordChange = (e) => {
+        setPassword(e.target.value);
+        if (error) setError('');
     };
 
     return (
@@ -116,10 +160,15 @@ const LoginPage = () => {
                                 <input
                                     type="text"
                                     value={username}
-                                    onChange={(e) => setUsername(e.target.value)}
-                                    className="w-full bg-gray-800/50 border border-gray-600 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
+                                    onChange={handleUsernameChange}
+                                    className={`w-full bg-gray-800/50 border rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent transition-all duration-300 ${
+                                        error 
+                                            ? 'border-red-500 focus:ring-red-500' 
+                                            : 'border-gray-600 focus:ring-blue-500'
+                                    }`}
                                     placeholder="Enter your username"
                                     required
+                                    autoComplete="username"
                                 />
                             </div>
                         </div>
@@ -133,15 +182,20 @@ const LoginPage = () => {
                                 <input
                                     type={showPassword ? 'text' : 'password'}
                                     value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full bg-gray-800/50 border border-gray-600 rounded-lg pl-10 pr-12 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
+                                    onChange={handlePasswordChange}
+                                    className={`w-full bg-gray-800/50 border rounded-lg pl-10 pr-12 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent transition-all duration-300 ${
+                                        error 
+                                            ? 'border-red-500 focus:ring-red-500' 
+                                            : 'border-gray-600 focus:ring-blue-500'
+                                    }`}
                                     placeholder="Enter your password"
                                     required
+                                    autoComplete="current-password"
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-300"
+                                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-300 transition-colors duration-200"
                                 >
                                     {showPassword ? <HiEyeOff /> : <HiEye />}
                                 </button>
@@ -149,14 +203,20 @@ const LoginPage = () => {
                         </div>
 
                         {error && (
-                            <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-3">
-                                <p className="text-red-400 text-sm text-center">{error}</p>
+                            <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-4">
+                                <div className="flex items-start space-x-3">
+                                    <HiExclamationCircle className="text-red-400 text-lg mt-0.5 flex-shrink-0" />
+                                    <div>
+                                        <p className="text-red-400 text-sm font-medium">Login Failed</p>
+                                        <p className="text-red-300 text-sm mt-1">{error}</p>
+                                    </div>
+                                </div>
                             </div>
                         )}
 
                         <button 
                             type="submit" 
-                            disabled={isLoading}
+                            disabled={isLoading || !username.trim() || !password}
                             className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-500 disabled:to-gray-600 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-300 transform hover:scale-105 disabled:scale-100 disabled:cursor-not-allowed"
                         >
                             {isLoading ? (
@@ -172,6 +232,8 @@ const LoginPage = () => {
                         
                     </form>
                 </div>
+
+
             </div>
         </div>
     );
