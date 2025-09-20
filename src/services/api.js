@@ -31,14 +31,29 @@ api.interceptors.request.use(
 api.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response?.status === 401) {
+        // Only redirect to login for 401 errors that are NOT from the login endpoint
+        if (error.response?.status === 401 && !error.config?.url?.includes('/login')) {
             localStorage.removeItem('token');
             localStorage.removeItem('user');
+            localStorage.removeItem('currentUser');
+            localStorage.removeItem('userId');
             window.location.href = '/login';
         }
         return Promise.reject(error);
     }
 );
+
+// Custom Error class for API errors
+class APIError extends Error {
+    constructor(message, status = null, response = null, request = null) {
+        super(message);
+        this.name = 'APIError';
+        this.status = status;
+        this.response = response;
+        this.request = request;
+        this.error = message; // For backward compatibility
+    }
+}
 
 // Auth API
 export const authAPI = {
@@ -47,7 +62,28 @@ export const authAPI = {
             const response = await api.post('/login', credentials);
             return response.data;
         } catch (error) {
-            throw error.response?.data || error;
+            console.error('AuthAPI Login Error:', error);
+            
+            // Don't let the interceptor handle login errors
+            if (error.response) {
+                // Server responded with error status
+                const errorData = error.response.data;
+                const errorMessage = errorData?.error || errorData?.message || 'Login failed';
+                const apiError = new APIError(errorMessage, error.response.status, error.response);
+                apiError.message = errorData?.message || errorData?.error || 'Authentication failed';
+                throw apiError;
+            } else if (error.request) {
+                // Network error
+                const apiError = new APIError('Network error - cannot reach server', null, null, error.request);
+                apiError.message = 'Cannot connect to server. Please check your connection.';
+                throw apiError;
+            } else {
+                // Other error
+                const errorMessage = error.message || 'Unknown error occurred';
+                const apiError = new APIError(errorMessage);
+                apiError.message = error.message || 'An unexpected error occurred';
+                throw apiError;
+            }
         }
     },
 
@@ -217,19 +253,19 @@ export const problemsAPI = {
 // Contest API
 export const contestAPI = {
     getAllContests: async (params = {}) => {
-    try {
-        console.log('Making request to /api/contests with params:', params);
-        const response = await api.get('/api/contests', { params });
-        console.log('Raw axios response:', response);
-        console.log('Response data:', response.data);
-        return response.data;
-    } catch (error) {
-        console.error('Contest API error:', error);
-        console.error('Error response:', error.response?.data);
-        console.error('Error status:', error.response?.status);
-        throw error.response?.data || error;
-    }
-},
+        try {
+            console.log('Making request to /api/contests with params:', params);
+            const response = await api.get('/api/contests', { params });
+            console.log('Raw axios response:', response);
+            console.log('Response data:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('Contest API error:', error);
+            console.error('Error response:', error.response?.data);
+            console.error('Error status:', error.response?.status);
+            throw error.response?.data || error;
+        }
+    },
 
     getContestById: async (id) => {
         try {
