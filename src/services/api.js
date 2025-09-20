@@ -217,13 +217,19 @@ export const problemsAPI = {
 // Contest API
 export const contestAPI = {
     getAllContests: async (params = {}) => {
-        try {
-            const response = await api.get('/api/contests', { params });
-            return response.data;
-        } catch (error) {
-            throw error.response?.data || error;
-        }
-    },
+    try {
+        console.log('Making request to /api/contests with params:', params);
+        const response = await api.get('/api/contests', { params });
+        console.log('Raw axios response:', response);
+        console.log('Response data:', response.data);
+        return response.data;
+    } catch (error) {
+        console.error('Contest API error:', error);
+        console.error('Error response:', error.response?.data);
+        console.error('Error status:', error.response?.status);
+        throw error.response?.data || error;
+    }
+},
 
     getContestById: async (id) => {
         try {
