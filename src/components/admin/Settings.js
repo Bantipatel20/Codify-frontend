@@ -66,14 +66,35 @@ const Settings = ({ onBack }) => {
             setError('Failed to load admin data');
         }
     };
-
-    const loadStudents = async () => {
-        try {
-            setStudentsLoading(true);
-            const response = await userAPI.getAllUsers({ limit: 100 });
+const loadStudents = async () => {
+    try {
+        setStudentsLoading(true);
+        const response = await userAPI.getAllUsers({ limit: 100 });
+        
+        console.log('API Response:', response); // Debug log to see the actual structure
+        
+        if (response.success) {
+            // Check if users array exists and handle different response structures
+            let usersArray = [];
             
-            if (response.success) {
-                const studentsData = response.data.users.map(user => ({
+            if (response.data && Array.isArray(response.data.users)) {
+                usersArray = response.data.users;
+            } else if (response.data && Array.isArray(response.data)) {
+                usersArray = response.data;
+            } else if (Array.isArray(response.users)) {
+                usersArray = response.users;
+            } else if (Array.isArray(response)) {
+                usersArray = response;
+            } else {
+                console.error('Unexpected response structure:', response);
+                setError('Unexpected response format from server');
+                return;
+            }
+
+            // Filter out the admin user from the students list
+            const studentsData = usersArray
+                .filter(user => user._id !== ADMIN_USER_ID) // Exclude admin user
+                .map(user => ({
                     _id: user._id,
                     name: user.name || 'Unknown',
                     email: user.email || 'No email',
@@ -82,16 +103,30 @@ const Settings = ({ onBack }) => {
                     department: user.department || 'Not specified',
                     batch: user.batch || 'N/A'
                 }));
-                setStudents(studentsData);
-                setFilteredStudents(studentsData);
-            }
-        } catch (error) {
-            console.error('Error loading students:', error);
-            setError('Failed to load students data');
-        } finally {
-            setStudentsLoading(false);
+            
+            setStudents(studentsData);
+            setFilteredStudents(studentsData);
+        } else {
+            console.error('API request failed:', response);
+            setError(response.error || 'Failed to load students data');
         }
-    };
+    } catch (error) {
+        console.error('Error loading students:', error);
+        
+        // More specific error handling
+        if (error.response) {
+            setError(`Server error: ${error.response.status} - ${error.response.data?.error || 'Unknown error'}`);
+        } else if (error.request) {
+            setError('Network error: Unable to reach server');
+        } else {
+            setError(`Error: ${error.message || 'Unknown error occurred'}`);
+        }
+    } finally {
+        setStudentsLoading(false);
+    }
+};
+
+
 
     const handleInputChange = (field, value) => {
         setFormData(prev => ({
