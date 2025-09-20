@@ -6,12 +6,10 @@ import { contestAPI, authAPI } from '../../services/api';
 
 const Contests = () => {
   const navigate = useNavigate();
-  const [contests, setContests] = useState([]);
   const [filteredContests, setFilteredContests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
-
 
   // Fetch user profile
   const fetchUserProfile = useCallback(async () => {
@@ -33,99 +31,112 @@ const Contests = () => {
     }
   }, []);
 
-  // Check if user is eligible for contest
-  const checkEligibility = useCallback((contest, user) => {
+  // Check if user matches contest criteria (for automatic contests)
+  const checkCriteriaMatch = useCallback((contest, user) => {
+    if (!user || !contest.filterCriteria) return false;
+
+    const criteria = contest.filterCriteria;
+    
+    console.log('🔍 Checking criteria match for:', contest.title);
+    console.log('User:', { 
+      dept: user.department, 
+      sem: user.semester, 
+      div: user.div, 
+      batch: user.batch 
+    });
+    console.log('Criteria:', criteria);
+    
+    // Check department
+    if (criteria.department && criteria.department.length > 0) {
+      const allowedDepts = Array.isArray(criteria.department) 
+        ? criteria.department 
+        : [criteria.department];
+      
+      if (!allowedDepts.includes(user.department)) {
+        console.log('❌ Department mismatch:', user.department, 'not in', allowedDepts);
+        return false;
+      }
+    }
+    
+    // Check semester
+    if (criteria.semester && criteria.semester.length > 0) {
+      const userSem = parseInt(user.semester);
+      const allowedSems = Array.isArray(criteria.semester) 
+        ? criteria.semester.map(s => parseInt(s))
+        : [parseInt(criteria.semester)];
+      
+      if (!allowedSems.includes(userSem)) {
+        console.log('❌ Semester mismatch:', userSem, 'not in', allowedSems);
+        return false;
+      }
+    }
+    
+    // Check division
+    if (criteria.division && criteria.division.length > 0) {
+      const userDiv = parseInt(user.div);
+      const allowedDivs = Array.isArray(criteria.division) 
+        ? criteria.division.map(d => parseInt(d))
+        : [parseInt(criteria.division)];
+      
+      if (!allowedDivs.includes(userDiv)) {
+        console.log('❌ Division mismatch:', userDiv, 'not in', allowedDivs);
+        return false;
+      }
+    }
+    
+    // Check batch
+    if (criteria.batch && criteria.batch.length > 0) {
+      const allowedBatches = Array.isArray(criteria.batch) 
+        ? criteria.batch 
+        : [criteria.batch];
+      
+      if (!allowedBatches.includes(user.batch)) {
+        console.log('❌ Batch mismatch:', user.batch, 'not in', allowedBatches);
+        return false;
+      }
+    }
+    
+    console.log('✅ Criteria match found for:', contest.title);
+    return true;
+  }, []);
+
+  // Check if contest should be shown to user
+  const checkContestVisibility = useCallback((contest, user) => {
     if (!user) {
       console.log('❌ No user profile, hiding contest:', contest.title);
       return false;
     }
 
-    // Manual selection contests are open to all authenticated users
-    if (contest.participantSelection === 'manual') {
-      console.log('✅ Manual selection contest, showing:', contest.title);
-      return true;
-    }
-
-    // Automatic selection contests need criteria checking
-    if (contest.participantSelection === 'automatic' && contest.filterCriteria) {
-      const criteria = contest.filterCriteria;
-      
-      console.log('🔍 Checking eligibility for:', contest.title);
-      console.log('User:', { 
-        dept: user.department, 
-        sem: user.semester, 
-        div: user.div, 
-        batch: user.batch 
-      });
-      console.log('Criteria:', criteria);
-      
-      // Check department - handle both array and string formats
-      if (criteria.department && criteria.department.length > 0) {
-        const allowedDepts = Array.isArray(criteria.department) 
-          ? criteria.department 
-          : [criteria.department];
-        
-        if (!allowedDepts.includes(user.department)) {
-          console.log('❌ Department mismatch:', user.department, 'not in', allowedDepts);
-          return false;
-        }
-      }
-      
-      // Check semester - handle both array and string formats
-      if (criteria.semester && criteria.semester.length > 0) {
-        const userSem = parseInt(user.semester);
-        const allowedSems = Array.isArray(criteria.semester) 
-          ? criteria.semester.map(s => parseInt(s))
-          : [parseInt(criteria.semester)];
-        
-        if (!allowedSems.includes(userSem)) {
-          console.log('❌ Semester mismatch:', userSem, 'not in', allowedSems);
-          return false;
-        }
-      }
-      
-      // Check division - handle both array and string formats
-      if (criteria.division && criteria.division.length > 0) {
-        const userDiv = parseInt(user.div);
-        const allowedDivs = Array.isArray(criteria.division) 
-          ? criteria.division.map(d => parseInt(d))
-          : [parseInt(criteria.division)];
-        
-        if (!allowedDivs.includes(userDiv)) {
-          console.log('❌ Division mismatch:', userDiv, 'not in', allowedDivs);
-          return false;
-        }
-      }
-      
-      // Check batch - handle both array and string formats
-      if (criteria.batch && criteria.batch.length > 0) {
-        const allowedBatches = Array.isArray(criteria.batch) 
-          ? criteria.batch 
-          : [criteria.batch];
-        
-        if (!allowedBatches.includes(user.batch)) {
-          console.log('❌ Batch mismatch:', user.batch, 'not in', allowedBatches);
-          return false;
-        }
-      }
-      
-      // If all criteria arrays are empty, show the contest to everyone (no filtering)
-      const hasAnyCriteria = (
-        (criteria.department && criteria.department.length > 0) ||
-        (criteria.semester && criteria.semester.length > 0) ||
-        (criteria.division && criteria.division.length > 0) ||
-        (criteria.batch && criteria.batch.length > 0)
+    // Only show automatic selection contests
+    if (contest.participantSelection === 'automatic') {
+      // If no criteria specified, show to everyone
+      const hasAnyCriteria = contest.filterCriteria && (
+        (contest.filterCriteria.department && contest.filterCriteria.department.length > 0) ||
+        (contest.filterCriteria.semester && contest.filterCriteria.semester.length > 0) ||
+        (contest.filterCriteria.division && contest.filterCriteria.division.length > 0) ||
+        (contest.filterCriteria.batch && contest.filterCriteria.batch.length > 0)
       );
       
       if (!hasAnyCriteria) {
-        console.log('✅ No criteria specified, showing contest to all users:', contest.title);
+        console.log('✅ Automatic contest with no criteria, showing to all users:', contest.title);
         return true;
+      }
+      
+      // Check if user matches criteria
+      const criteriaMatch = checkCriteriaMatch(contest, user);
+      if (criteriaMatch) {
+        console.log('✅ User matches criteria, showing automatic contest:', contest.title);
+        return true;
+      } else {
+        console.log('❌ User does not match criteria, hiding automatic contest:', contest.title);
+        return false;
       }
     }
     
-    console.log('✅ Contest eligible:', contest.title);
-    return true;
-  }, []);
+    // Hide manual contests completely
+    console.log('❌ Hiding manual contest:', contest.title);
+    return false;
+  }, [checkCriteriaMatch]);
 
   // Check if user is registered for contest
   const checkRegistration = useCallback((contest, user) => {
@@ -134,6 +145,35 @@ const Contests = () => {
       (typeof p === 'object' ? p.userId : p) === user._id
     );
   }, []);
+
+  // Auto-register user for automatic contests they're eligible for
+  const autoRegisterForContest = useCallback(async (contest, user) => {
+    try {
+      // Only auto-register for automatic contests where user matches criteria
+      if (contest.participantSelection === 'automatic' && 
+          contest.status === 'Upcoming' && 
+          !checkRegistration(contest, user)) {
+        
+        const criteriaMatch = checkCriteriaMatch(contest, user);
+        if (criteriaMatch) {
+          console.log('🔄 Auto-registering user for contest:', contest.title);
+          
+          const response = await contestAPI.registerParticipant(contest._id, user._id);
+          
+          if (response.success) {
+            console.log('✅ Auto-registration successful for:', contest.title);
+            return true;
+          } else {
+            console.log('❌ Auto-registration failed for:', contest.title, response.error);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('❌ Auto-registration error for', contest.title, ':', err);
+    }
+    
+    return false;
+  }, [checkCriteriaMatch, checkRegistration]);
 
   // Fetch contests
   const fetchContests = useCallback(async () => {
@@ -176,40 +216,58 @@ const Contests = () => {
         
         if (data.data.length === 0) {
           console.log('📭 No contests found in database');
-          setContests([]);
           setFilteredContests([]);
           setLoading(false);
           return;
         }
         
-        // Process contests with eligibility and registration checks
-        const processedContests = data.data.map(contest => {
-          const isEligible = checkEligibility(contest, user);
-          const isRegistered = checkRegistration(contest, user);
-          
-          console.log(`🏆 Contest "${contest.title}":`, {
-            eligible: isEligible,
-            registered: isRegistered,
-            selection: contest.participantSelection,
-            status: contest.status,
-            criteriaEmpty: !contest.filterCriteria || Object.values(contest.filterCriteria).every(v => 
-              Array.isArray(v) ? v.length === 0 : !v
-            )
-          });
-          
-          return {
-            ...contest,
-            isEligible,
-            isRegistered
-          };
-        });
+        // Process contests with visibility, registration checks, and auto-registration
+        const processedContests = [];
         
-        setContests(processedContests);
+        for (const contest of data.data) {
+          const isVisible = checkContestVisibility(contest, user);
+          
+          if (isVisible) {
+            // Check current registration status
+            let isRegistered = checkRegistration(contest, user);
+            
+            // Try auto-registration for automatic contests
+            if (!isRegistered) {
+              const autoRegistered = await autoRegisterForContest(contest, user);
+              if (autoRegistered) {
+                isRegistered = true;
+                // Refresh contest data to get updated participant list
+                try {
+                  const updatedContestResponse = await contestAPI.getContestById(contest._id);
+                  if (updatedContestResponse.success) {
+                    Object.assign(contest, updatedContestResponse.data);
+                  }
+                } catch (refreshError) {
+                  console.log('Could not refresh contest data:', refreshError);
+                }
+              }
+            }
+            
+            console.log(`🏆 Contest "${contest.title}":`, {
+              visible: isVisible,
+              registered: isRegistered,
+              selection: contest.participantSelection,
+              status: contest.status
+            });
+            
+            processedContests.push({
+              ...contest,
+              isVisible,
+              isRegistered
+            });
+          } else {
+            console.log(`🚫 Hiding contest "${contest.title}" - user not eligible or manual contest`);
+          }
+        }
         
-        // Filter eligible contests
-        const eligibleContests = processedContests.filter(contest => contest.isEligible);
-        console.log(`✨ Showing ${eligibleContests.length} eligible contests out of ${processedContests.length} total`);
-        setFilteredContests(eligibleContests);
+        setFilteredContests(processedContests); // All processed contests are visible
+        
+        console.log(`✨ Showing ${processedContests.length} contests out of ${data.data.length} total`);
         
       } else {
         console.error('❌ API response not successful:', data);
@@ -235,36 +293,12 @@ const Contests = () => {
     } finally {
       setLoading(false);
     }
-  }, [fetchUserProfile, checkEligibility, checkRegistration]);
+  }, [fetchUserProfile, checkContestVisibility, checkRegistration, autoRegisterForContest]);
 
   // Initial load
   useEffect(() => {
     fetchContests();
   }, [fetchContests]);
-
-  // Handle contest registration
-  const handleRegister = async (contestId) => {
-    try {
-      if (!userProfile) {
-        alert('Please log in to register for contests');
-        return;
-      }
-
-      console.log('🔄 Registering for contest:', contestId);
-      
-      const response = await contestAPI.registerParticipant(contestId, userProfile._id);
-
-      if (response.success) {
-        alert('Successfully registered for contest!');
-        await fetchContests();
-      } else {
-        throw new Error(response.error || 'Failed to register for contest');
-      }
-    } catch (err) {
-      console.error('❌ Registration error:', err);
-      alert(err.message || 'Failed to register for contest');
-    }
-  };
 
   // Utility functions
   const getStatusColor = (status) => {
@@ -337,7 +371,7 @@ const Contests = () => {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
           <p className="text-white text-lg">Loading contests...</p>
           <p className="text-gray-400 text-sm mt-2">
-            Checking server connection and user eligibility...
+            Checking eligibility and auto-registering...
           </p>
         </div>
       </div>
@@ -379,8 +413,15 @@ const Contests = () => {
             <HiStar className="text-2xl text-white" />
           </div>
           <h1 className="text-5xl font-bold text-white mb-4">Programming Contests</h1>
-    
-            
+          <p className="text-gray-300 text-xl">Compete with peers and showcase your skills</p>
+          {userProfile && (
+            <div className="mt-4 text-gray-400 text-sm">
+              <p>Welcome, <span className="text-white font-medium">{userProfile.name}</span></p>
+              <p>
+                Profile: {userProfile.department} • Sem {userProfile.semester} • Div {userProfile.div} • Batch {userProfile.batch}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Contests List */}
@@ -399,12 +440,8 @@ const Contests = () => {
                         Registered ✓
                       </span>
                     )}
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium border ${
-                      contest.participantSelection === 'automatic' 
-                        ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' 
-                        : 'bg-purple-500/20 text-purple-400 border-purple-500/30'
-                    }`}>
-                      {contest.participantSelection === 'automatic' ? 'Auto-Selected' : 'Manual Registration'}
+                    <span className="px-3 py-1 rounded-full text-xs font-medium border bg-blue-500/20 text-blue-400 border-blue-500/30">
+                      Auto-Selected
                     </span>
                   </div>
                   
@@ -417,7 +454,7 @@ const Contests = () => {
                     </div>
                     <div className="flex items-center space-x-2 text-sm text-gray-400">
                       <HiClock className="text-yellow-400" />
-                      <span>Duration: {contest.duration || 'TBD'}</span>
+                      <span>Duration: {contest.duration || 'TBD'} hours</span>
                     </div>
                     <div className="flex items-center space-x-2 text-sm text-gray-400">
                       <HiUsers className="text-purple-400" />
@@ -436,12 +473,18 @@ const Contests = () => {
                   )}
 
                   {/* Contest Criteria Display */}
-                  {contest.filterCriteria && contest.participantSelection === 'automatic' && (
+                  {contest.filterCriteria && (
                     <div className="mb-4">
-                      <p className="text-xs text-gray-400 mb-2">Eligibility Criteria:</p>
+                      <p className="text-xs text-gray-400 mb-2">
+                        {contest.isRegistered ? 'You match the criteria:' : 'Eligibility Criteria:'}
+                      </p>
                       <div className="flex flex-wrap gap-2">
                         {formatCriteria(contest.filterCriteria).map((criterion, index) => (
-                          <span key={index} className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded">
+                          <span key={index} className={`text-xs px-2 py-1 rounded ${
+                            contest.isRegistered 
+                              ? 'bg-green-500/20 text-green-400' 
+                              : 'bg-blue-500/20 text-blue-400'
+                          }`}>
                             {criterion}
                           </span>
                         ))}
@@ -474,16 +517,6 @@ const Contests = () => {
                       <span>Participate</span>
                     </button>
                   )}
-                  
-                  {contest.status === 'Upcoming' && !contest.isRegistered && contest.participantSelection === 'manual' && (
-                    <button 
-                      onClick={() => handleRegister(contest._id)}
-                      className="flex items-center space-x-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-xl font-medium transition-all duration-300 transform hover:scale-105"
-                    >
-                      <HiUsers className="text-lg" />
-                      <span>Register</span>
-                    </button>
-                  )}
 
                   <button 
                     onClick={() => navigate(`/client/contests/${contest._id}`)}
@@ -499,46 +532,16 @@ const Contests = () => {
         </div>
 
         {/* Empty State */}
-        {filteredContests.length === 0 && contests.length === 0 && (
+        {filteredContests.length === 0 && (
           <div className="text-center py-12">
             <div className="w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
               <HiStar className="text-3xl text-gray-400" />
             </div>
             <h3 className="text-xl font-semibold text-white mb-2">No Contests Available</h3>
-            <p className="text-gray-400 mb-6">
-              There are currently no active contests in the system.
-            </p>
-            <button 
-              onClick={fetchContests}
-              className="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-xl transition-all duration-300 mx-auto"
-            >
-              <HiRefresh className="text-lg" />
-              <span>Refresh</span>
-            </button>
-          </div>
-        )}
-
-        {/* No Eligible Contests */}
-        {filteredContests.length === 0 && contests.length > 0 && (
-          <div className="text-center py-12">
-            <div className="w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-              <HiUsers className="text-3xl text-gray-400" />
-            </div>
-            <h3 className="text-xl font-semibold text-white mb-2">No Eligible Contests</h3>
             <p className="text-gray-400 mb-4">
-              Found {contests.length} contest{contests.length !== 1 ? 's' : ''}, but none match your profile.
+              No contests are available for your profile at the moment.
             </p>
-            {userProfile && (
-              <div className="bg-gray-800/50 rounded-lg p-4 max-w-md mx-auto mb-6">
-                <p className="text-sm text-gray-300">
-                  <strong>Your Profile:</strong><br />
-                  Department: {userProfile.department}<br />
-                  Semester: {userProfile.semester}<br />
-                  Division: {userProfile.div}<br />
-                  Batch: {userProfile.batch}
-                </p>
-              </div>
-            )}
+           
             <button 
               onClick={fetchContests}
               className="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-xl transition-all duration-300 mx-auto"
