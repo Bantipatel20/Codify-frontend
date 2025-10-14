@@ -1,6 +1,6 @@
 // src/components/admin/ProblemManagement.js
 import React, { useState, useEffect } from 'react';
-import { HiPlus, HiCode, HiArrowLeft, HiSave, HiTrash } from 'react-icons/hi';
+import { HiPlus, HiCode, HiArrowLeft, HiSave, HiTrash, HiEye, HiEyeOff } from 'react-icons/hi';
 import { problemsAPI, authAPI } from '../../services/api';
 import ViewProblems from './ViewProblems';
 
@@ -12,7 +12,12 @@ const ProblemManagement = ({ onBack }) => {
         description: '',
         difficulty: 'Easy',
         tags: [],
-        testCases: [{ input: '', output: '' }]
+        testCases: [{ input: '', output: '', isHidden: false, isPublic: true, description: '' }],
+        testCaseVisibility: {
+            showSampleTestCases: true,
+            maxVisibleTestCases: 2,
+            hideAllTestCases: false
+        }
     });
     const [loading, setLoading] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
@@ -23,47 +28,49 @@ const ProblemManagement = ({ onBack }) => {
 
     const fetchCurrentUser = async () => {
         try {
-            // Get the current username from localStorage (set during login)
-            const currentUsername = localStorage.getItem('currentUser');
+            // Get user from localStorage (set during login)
+            const storedUser = localStorage.getItem('user');
             
-            if (!currentUsername) {
-                console.log('No current user found, using mock admin user');
-                // Create mock admin user for development
-                const mockUser = {
-                    _id: '68ad4516c3be4979ebac1d49', // Your actual admin ID from database
-                    name: 'Admin User',
-                    email: 'admin@example.com',
-                    username: 'admin'
-                };
-                setCurrentUser(mockUser);
+            if (storedUser) {
+                const userData = JSON.parse(storedUser);
+                setCurrentUser(userData);
+                console.log('Current user from localStorage:', userData);
                 return;
             }
 
-            // For admin, use the actual admin ID from your database
+            // Fallback to getting current username
+            const currentUsername = localStorage.getItem('currentUser');
+            
+            if (!currentUsername) {
+                console.log('No current user found');
+                return;
+            }
+
+            // For admin, create user object from stored data
             if (currentUsername === 'admin') {
+                const userId = localStorage.getItem('userId');
                 const adminUser = {
-                    _id: '68ad4516c3be4979ebac1d49', // Your actual admin ID from database
+                    _id: userId || '68ad4516c3be4979ebac1d49',
                     name: 'Admin User',
                     email: 'admin@example.com',
-                    username: 'admin'
+                    username: 'admin',
+                    role: 'Admin'
                 };
                 setCurrentUser(adminUser);
-                
-                // Also store in localStorage for authAPI compatibility
-                authAPI.setCurrentUser(adminUser);
                 console.log('Admin user set:', adminUser);
                 return;
             }
 
-            // For other users, try to get from authAPI or create mock
+            // For other users, try to get from authAPI
             let user = authAPI.getCurrentUser();
             if (!user) {
-                // Create mock user
+                const userId = localStorage.getItem('userId');
                 user = {
-                    _id: '68ad4516c3be4979ebac1d49', // Fallback to admin ID
+                    _id: userId,
                     name: currentUsername,
                     email: `${currentUsername}@example.com`,
-                    username: currentUsername
+                    username: currentUsername,
+                    role: 'Admin'
                 };
                 authAPI.setCurrentUser(user);
             }
@@ -73,17 +80,6 @@ const ProblemManagement = ({ onBack }) => {
             
         } catch (error) {
             console.error('Error getting current user:', error);
-            
-            // Fallback to admin user
-            const adminUser = {
-                _id: '68ad4516c3be4979ebac1d49', // Your actual admin ID
-                name: 'Admin User',
-                email: 'admin@example.com',
-                username: 'admin'
-            };
-            setCurrentUser(adminUser);
-            authAPI.setCurrentUser(adminUser);
-            console.log('Fallback admin user set:', adminUser);
         }
     };
 
@@ -91,6 +87,16 @@ const ProblemManagement = ({ onBack }) => {
         setFormData(prev => ({
             ...prev,
             [field]: value
+        }));
+    };
+
+    const handleVisibilitySettingsChange = (field, value) => {
+        setFormData(prev => ({
+            ...prev,
+            testCaseVisibility: {
+                ...prev.testCaseVisibility,
+                [field]: value
+            }
         }));
     };
 
@@ -117,7 +123,13 @@ const ProblemManagement = ({ onBack }) => {
     const addTestCase = () => {
         setFormData(prev => ({
             ...prev,
-            testCases: [...prev.testCases, { input: '', output: '' }]
+            testCases: [...prev.testCases, { 
+                input: '', 
+                output: '', 
+                isHidden: false, 
+                isPublic: true, 
+                description: '' 
+            }]
         }));
     };
 
@@ -129,6 +141,16 @@ const ProblemManagement = ({ onBack }) => {
                 testCases: newTestCases
             }));
         }
+    };
+
+    const toggleTestCaseVisibility = (index) => {
+        const newTestCases = [...formData.testCases];
+        newTestCases[index].isHidden = !newTestCases[index].isHidden;
+        newTestCases[index].isPublic = !newTestCases[index].isHidden;
+        setFormData(prev => ({
+            ...prev,
+            testCases: newTestCases
+        }));
     };
 
     const handleSubmit = async (e) => {
@@ -150,9 +172,18 @@ const ProblemManagement = ({ onBack }) => {
             return;
         }
 
+        // Ensure at least one test case is visible unless explicitly hiding all
+        if (!formData.testCaseVisibility.hideAllTestCases) {
+            const visibleTestCases = formData.testCases.filter(tc => tc.isPublic && !tc.isHidden);
+            if (visibleTestCases.length === 0) {
+                alert('At least one test case must be visible to students, or enable "Hide All Test Cases"');
+                return;
+            }
+        }
+
         setLoading(true);
         try {
-            // Prepare problem data
+            // Prepare problem data according to updated schema
             const problemData = {
                 title: formData.title.trim(),
                 description: formData.description.trim(),
@@ -160,9 +191,13 @@ const ProblemManagement = ({ onBack }) => {
                 tags: formData.tags,
                 testCases: formData.testCases.map(tc => ({
                     input: tc.input.trim(),
-                    output: tc.output.trim()
+                    output: tc.output.trim(),
+                    isHidden: tc.isHidden || false,
+                    isPublic: tc.isPublic !== false, // Default to true if not specified
+                    description: tc.description || ''
                 })),
-                createdBy: currentUser._id // Send the user ID string
+                testCaseVisibility: formData.testCaseVisibility,
+                createdBy: currentUser._id
             };
 
             console.log('Submitting problem data:', problemData);
@@ -198,7 +233,12 @@ const ProblemManagement = ({ onBack }) => {
             description: '',
             difficulty: 'Easy',
             tags: [],
-            testCases: [{ input: '', output: '' }]
+            testCases: [{ input: '', output: '', isHidden: false, isPublic: true, description: '' }],
+            testCaseVisibility: {
+                showSampleTestCases: true,
+                maxVisibleTestCases: 2,
+                hideAllTestCases: false
+            }
         });
         setEditingProblem(null);
     };
@@ -213,9 +253,17 @@ const ProblemManagement = ({ onBack }) => {
             testCases: problem.testCases && problem.testCases.length > 0 
                 ? problem.testCases.map(tc => ({
                     input: tc.input || '',
-                    output: tc.output || ''
+                    output: tc.output || '',
+                    isHidden: tc.isHidden || false,
+                    isPublic: tc.isPublic !== false,
+                    description: tc.description || ''
                   }))
-                : [{ input: '', output: '' }]
+                : [{ input: '', output: '', isHidden: false, isPublic: true, description: '' }],
+            testCaseVisibility: problem.testCaseVisibility || {
+                showSampleTestCases: true,
+                maxVisibleTestCases: 2,
+                hideAllTestCases: false
+            }
         });
         setActiveTab('create');
     };
@@ -302,6 +350,54 @@ const ProblemManagement = ({ onBack }) => {
                     </div>
                 </div>
 
+                {/* Test Case Visibility Settings */}
+                <div className="bg-gray-700/50 border border-gray-600 rounded-lg p-6">
+                    <h3 className="text-lg font-semibold text-white mb-4">Test Case Visibility Settings</h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="flex items-center space-x-3">
+                            <input
+                                type="checkbox"
+                                id="showSamples"
+                                checked={formData.testCaseVisibility.showSampleTestCases}
+                                onChange={(e) => handleVisibilitySettingsChange('showSampleTestCases', e.target.checked)}
+                                className="w-4 h-4 text-blue-600 bg-gray-600 border-gray-500 rounded focus:ring-blue-500"
+                            />
+                            <label htmlFor="showSamples" className="text-sm text-gray-300">
+                                Show Sample Test Cases
+                            </label>
+                        </div>
+
+                        <div className="flex items-center space-x-3">
+                            <input
+                                type="checkbox"
+                                id="hideAll"
+                                checked={formData.testCaseVisibility.hideAllTestCases}
+                                onChange={(e) => handleVisibilitySettingsChange('hideAllTestCases', e.target.checked)}
+                                className="w-4 h-4 text-blue-600 bg-gray-600 border-gray-500 rounded focus:ring-blue-500"
+                            />
+                            <label htmlFor="hideAll" className="text-sm text-gray-300">
+                                Hide All Test Cases
+                            </label>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm text-gray-300 mb-1">
+                                Max Visible Test Cases
+                            </label>
+                            <input
+                                type="number"
+                                min="0"
+                                max="10"
+                                value={formData.testCaseVisibility.maxVisibleTestCases}
+                                onChange={(e) => handleVisibilitySettingsChange('maxVisibleTestCases', parseInt(e.target.value) || 0)}
+                                className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm focus:outline-none focus:border-blue-500"
+                                disabled={formData.testCaseVisibility.hideAllTestCases}
+                            />
+                        </div>
+                    </div>
+                </div>
+
                 {/* Test Cases */}
                 <div>
                     <div className="flex items-center justify-between mb-4">
@@ -320,9 +416,26 @@ const ProblemManagement = ({ onBack }) => {
 
                     <div className="space-y-4">
                         {formData.testCases.map((testCase, index) => (
-                            <div key={index} className="bg-gray-700/50 border border-gray-600 rounded-lg p-4">
+                            <div key={index} className={`border rounded-lg p-4 ${
+                                testCase.isHidden ? 'bg-red-900/20 border-red-500/30' : 'bg-gray-700/50 border-gray-600'
+                            }`}>
                                 <div className="flex items-center justify-between mb-3">
-                                    <h4 className="text-white font-medium">Test Case {index + 1}</h4>
+                                    <div className="flex items-center space-x-3">
+                                        <h4 className="text-white font-medium">Test Case {index + 1}</h4>
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleTestCaseVisibility(index)}
+                                            className={`flex items-center space-x-1 px-2 py-1 rounded text-xs transition-colors ${
+                                                testCase.isHidden 
+                                                    ? 'bg-red-600 hover:bg-red-700 text-white' 
+                                                    : 'bg-green-600 hover:bg-green-700 text-white'
+                                            }`}
+                                            title={testCase.isHidden ? 'Click to make visible' : 'Click to hide'}
+                                        >
+                                            {testCase.isHidden ? <HiEyeOff className="text-xs" /> : <HiEye className="text-xs" />}
+                                            <span>{testCase.isHidden ? 'Hidden' : 'Visible'}</span>
+                                        </button>
+                                    </div>
                                     {formData.testCases.length > 1 && (
                                         <button
                                             type="button"
@@ -334,32 +447,48 @@ const ProblemManagement = ({ onBack }) => {
                                     )}
                                 </div>
                                 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-4">
+                                    {/* Description */}
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-400 mb-2">
-                                            Input
+                                        <label className="block text-xs font-medium text-gray-400 mb-1">
+                                            Description (Optional)
                                         </label>
-                                        <textarea
-                                            value={testCase.input}
-                                            onChange={(e) => handleTestCaseChange(index, 'input', e.target.value)}
-                                            rows={3}
+                                        <input
+                                            type="text"
+                                            value={testCase.description}
+                                            onChange={(e) => handleTestCaseChange(index, 'description', e.target.value)}
                                             className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500"
-                                            placeholder="Enter test input..."
-                                            required
+                                            placeholder="Brief description of this test case..."
                                         />
                                     </div>
-                                    <div>
-                                        <label className="block text-xs font-medium text-gray-400 mb-2">
-                                            Expected Output
-                                        </label>
-                                        <textarea
-                                            value={testCase.output}
-                                            onChange={(e) => handleTestCaseChange(index, 'output', e.target.value)}
-                                            rows={3}
-                                            className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500"
-                                            placeholder="Enter expected output..."
-                                            required
-                                        />
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-400 mb-2">
+                                                Input *
+                                            </label>
+                                            <textarea
+                                                value={testCase.input}
+                                                onChange={(e) => handleTestCaseChange(index, 'input', e.target.value)}
+                                                rows={3}
+                                                className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                                                placeholder="Enter test input..."
+                                                required
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-400 mb-2">
+                                                Expected Output *
+                                            </label>
+                                            <textarea
+                                                value={testCase.output}
+                                                onChange={(e) => handleTestCaseChange(index, 'output', e.target.value)}
+                                                rows={3}
+                                                className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                                                placeholder="Enter expected output..."
+                                                required
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -415,7 +544,7 @@ const ProblemManagement = ({ onBack }) => {
                         </div>
                         <div>
                             <h1 className="text-3xl font-bold text-white">Problem Management</h1>
-                            <p className="text-gray-400">Create and manage coding challenges</p>
+                            <p className="text-gray-400">Create and manage coding challenges with advanced visibility controls</p>
                         </div>
                     </div>
 

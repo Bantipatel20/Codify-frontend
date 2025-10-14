@@ -185,19 +185,44 @@ export const userAPI = {
 };
 
 // Problems API
+// Updated problemsAPI section in src/services/api.js
 export const problemsAPI = {
     getAllProblems: async (params = {}) => {
         try {
-            const response = await api.get('/api/problems', { params });
+            // Add admin role header for proper visibility handling
+            const user = authAPI.getCurrentUser();
+            const headers = {};
+            if (user && user.role === 'Admin') {
+                headers['user-role'] = 'admin';
+            }
+            
+            const response = await api.get('/api/problems', { 
+                params: {
+                    ...params,
+                    isAdmin: user?.role === 'Admin' ? 'true' : 'false'
+                },
+                headers 
+            });
             return response.data;
         } catch (error) {
             throw error.response?.data || error;
         }
     },
 
-    getProblemById: async (id) => {
+    getProblemById: async (id, isAdmin = false) => {
         try {
-            const response = await api.get(`/api/problems/${id}`);
+            const user = authAPI.getCurrentUser();
+            const headers = {};
+            if (user && user.role === 'Admin') {
+                headers['user-role'] = 'admin';
+            }
+
+            const response = await api.get(`/api/problems/${id}`, { 
+                params: {
+                    isAdmin: user?.role === 'Admin' ? 'true' : 'false'
+                },
+                headers 
+            });
             return response.data;
         } catch (error) {
             throw error.response?.data || error;
@@ -231,6 +256,54 @@ export const problemsAPI = {
         }
     },
 
+    // Test case visibility management
+    toggleTestCaseVisibility: async (problemId, testCaseIndex, isHidden) => {
+        try {
+            const response = await api.put(`/api/problems/${problemId}/testcase/${testCaseIndex}/visibility`, {
+                isHidden
+            });
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    updateVisibilitySettings: async (problemId, visibilitySettings) => {
+        try {
+            const response = await api.put(`/api/problems/${problemId}/visibility-settings`, visibilitySettings);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    hideAllTestCases: async (problemId) => {
+        try {
+            const response = await api.post(`/api/problems/${problemId}/hide-all-testcases`);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    showAllTestCases: async (problemId) => {
+        try {
+            const response = await api.post(`/api/problems/${problemId}/show-all-testcases`);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
+    getSampleTestCases: async (problemId) => {
+        try {
+            const response = await api.get(`/api/problems/${problemId}/samples`);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || error;
+        }
+    },
+
     getAllTags: async () => {
         try {
             const response = await api.get('/api/problems/meta/tags');
@@ -249,6 +322,7 @@ export const problemsAPI = {
         }
     }
 };
+
 
 // Contest API
 export const contestAPI = {

@@ -1,5 +1,5 @@
 // src/components/admin/StudentManagement.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { HiUserGroup, HiPlus, HiSearch, HiPencil, HiTrash, HiEye, HiX, HiArrowLeft, HiUpload, HiDownload } from 'react-icons/hi';
 import { userAPI } from '../../services/api';
 import * as XLSX from 'xlsx';
@@ -11,10 +11,11 @@ const StudentManagement = ({ onBack }) => {
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Filter states
-  const [departmentFilter, setDepartmentFilter] = useState('All');
+  // Filter states (removed department filter since it's only CSE)
   const [batchFilter, setBatchFilter] = useState('All');
   const [divisionFilter, setDivisionFilter] = useState('All');
+  const [semesterFilter, setSemesterFilter] = useState('All');
+  const [roleFilter, setRoleFilter] = useState('All');
   
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -29,44 +30,22 @@ const StudentManagement = ({ onBack }) => {
     username: '',
     password: '',
     student_id: '',
-    department: '',
+    department: 'CSE', // Fixed to CSE only
     batch: '',
-    div: ''
+    div: '',
+    semester: '',
+    role: ''
   });
   const [formLoading, setFormLoading] = useState(false);
 
-  // Dropdown options
-  const departments = ['CSE', 'IT', 'ECE', 'MECH', 'CIVIL', 'AIML'];
-  const batches = ['A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4', 'C1', 'C2', 'C3', 'C4', 'D1', 'D2', 'D3', 'D4'];
-  const divisions = ['1', '2', '3', '4'];
+  // Updated dropdown options - removed departments array
+  const batches = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+  const divisions = ['1', '2'];
+  const semesters = ['1', '2', '3', '4', '5', '6', '7', '8'];
+  const roles = ['Admin', 'Student'];
 
-  useEffect(() => {
-    fetchStudents();
-  }, []);
-
-  useEffect(() => {
-    filterStudents();
-  }, [students, searchTerm, departmentFilter, batchFilter, divisionFilter]);
-
-  const fetchStudents = async () => {
-    try {
-      setLoading(true);
-      const response = await userAPI.getAllUsers({ limit: 1000 });
-      
-      if (response.success) {
-        setStudents(response.data);
-      } else {
-        setError('Failed to fetch students');
-      }
-    } catch (err) {
-      console.error('Error fetching students:', err);
-      setError('Failed to fetch students');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filterStudents = () => {
+  // Memoize filterStudents function to prevent unnecessary re-renders
+  const filterStudents = useCallback(() => {
     let filtered = students;
 
     // Search filter
@@ -79,11 +58,6 @@ const StudentManagement = ({ onBack }) => {
       );
     }
 
-    // Department filter
-    if (departmentFilter !== 'All') {
-      filtered = filtered.filter(student => student.department === departmentFilter);
-    }
-
     // Batch filter
     if (batchFilter !== 'All') {
       filtered = filtered.filter(student => student.batch === batchFilter);
@@ -91,10 +65,49 @@ const StudentManagement = ({ onBack }) => {
 
     // Division filter
     if (divisionFilter !== 'All') {
-      filtered = filtered.filter(student => student.div === divisionFilter);
+      filtered = filtered.filter(student => student.div === parseInt(divisionFilter));
+    }
+
+    // Semester filter
+    if (semesterFilter !== 'All') {
+      filtered = filtered.filter(student => student.semester === parseInt(semesterFilter));
+    }
+
+    // Role filter
+    if (roleFilter !== 'All') {
+      filtered = filtered.filter(student => student.role === roleFilter);
     }
 
     setFilteredStudents(filtered);
+  }, [students, searchTerm, batchFilter, divisionFilter, semesterFilter, roleFilter]);
+
+  useEffect(() => {
+    fetchStudents();
+  }, []);
+
+  useEffect(() => {
+    filterStudents();
+  }, [filterStudents]); // Now filterStudents is properly memoized
+
+  const fetchStudents = async () => {
+    try {
+      setLoading(true);
+      // Filter to only get CSE students
+      const response = await userAPI.getAllUsers({ limit: 1000, department: 'CSE' });
+      
+      if (response.success) {
+        // Double filter to ensure only CSE students
+        const cseStudents = response.data.filter(student => student.department === 'CSE');
+        setStudents(cseStudents);
+      } else {
+        setError('Failed to fetch students');
+      }
+    } catch (err) {
+      console.error('Error fetching students:', err);
+      setError('Failed to fetch students');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resetForm = () => {
@@ -104,9 +117,11 @@ const StudentManagement = ({ onBack }) => {
       username: '',
       password: '',
       student_id: '',
-      department: '',
+      department: 'CSE', // Always CSE
       batch: '',
-      div: ''
+      div: '',
+      semester: '',
+      role: 'Student'
     });
   };
 
@@ -123,9 +138,11 @@ const StudentManagement = ({ onBack }) => {
       username: student.username,
       password: '', // Don't pre-fill password
       student_id: student.student_id,
-      department: student.department,
+      department: 'CSE', // Always CSE
       batch: student.batch,
-      div: student.div
+      div: student.div?.toString() || '',
+      semester: student.semester?.toString() || '',
+      role: student.role || 'Student'
     });
     setShowEditModal(true);
   };
@@ -140,11 +157,19 @@ const StudentManagement = ({ onBack }) => {
     setFormLoading(true);
 
     try {
+      // Prepare form data with proper data types
+      const submitData = {
+        ...formData,
+        department: 'CSE', // Force CSE
+        div: parseInt(formData.div),
+        semester: parseInt(formData.semester)
+      };
+
       let response;
       if (showAddModal) {
-        response = await userAPI.createUser(formData);
+        response = await userAPI.createUser(submitData);
       } else {
-        const updateData = { ...formData };
+        const updateData = { ...submitData };
         if (!updateData.password) {
           delete updateData.password; // Don't update password if empty
         }
@@ -162,7 +187,7 @@ const StudentManagement = ({ onBack }) => {
       }
     } catch (err) {
       console.error('Error saving student:', err);
-      alert(`Failed to ${showAddModal ? 'add' : 'update'} student`);
+      alert(`Failed to ${showAddModal ? 'add' : 'update'} student: ${err.message || err.error || 'Unknown error'}`);
     } finally {
       setFormLoading(false);
     }
@@ -210,9 +235,11 @@ const StudentManagement = ({ onBack }) => {
             username: row.Username || row.username,
             password: row.Password || row.password || 'defaultPassword123',
             student_id: row['Student ID'] || row.student_id,
-            department: row.Department || row.department,
+            department: 'CSE', // Force CSE
             batch: row.Batch || row.batch,
-            div: String(row.Division || row.div || row.Div)
+            div: parseInt(row.Division || row.div || row.Div) || 1,
+            semester: parseInt(row.Semester || row.semester) || 1,
+            role: row.Role || row.role || 'Student'
           };
 
           const response = await userAPI.createUser(studentData);
@@ -240,7 +267,7 @@ const StudentManagement = ({ onBack }) => {
   };
 
   const handleDownloadTemplate = () => {
-    // Create sample data with the correct format
+    // Create sample data with CSE only
     const templateData = [
       {
         'Name': 'Banti Patel',
@@ -248,9 +275,10 @@ const StudentManagement = ({ onBack }) => {
         'Username': '23cs058',
         'Password': '201005',
         'Student ID': '23CS058',
-        'Department': 'CSE',
         'Batch': 'C1',
-        'Division': '1'
+        'Division': '1',
+        'Semester': '5',
+        'Role': 'Student'
       }
     ];
 
@@ -265,18 +293,19 @@ const StudentManagement = ({ onBack }) => {
       { wch: 15 }, // Username
       { wch: 15 }, // Password
       { wch: 15 }, // Student ID
-      { wch: 12 }, // Department
       { wch: 10 }, // Batch
-      { wch: 10 }  // Division
+      { wch: 10 }, // Division
+      { wch: 10 }, // Semester
+      { wch: 10 }  // Role
     ];
     worksheet['!cols'] = columnWidths;
 
     // Add the worksheet to workbook
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Students Template');
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'CSE Students Template');
 
     // Generate filename with current date
     const currentDate = new Date().toISOString().split('T')[0];
-    const filename = `student_upload_template_${currentDate}.xlsx`;
+    const filename = `cse_student_upload_template_${currentDate}.xlsx`;
 
     // Download the file
     XLSX.writeFile(workbook, filename);
@@ -294,9 +323,10 @@ const StudentManagement = ({ onBack }) => {
       'Email': student.email,
       'Username': student.username,
       'Student ID': student.student_id,
-      'Department': student.department,
       'Batch': student.batch,
       'Division': student.div,
+      'Semester': student.semester,
+      'Role': student.role,
       'Created At': new Date(student.createdAt).toLocaleDateString()
     }));
 
@@ -310,19 +340,20 @@ const StudentManagement = ({ onBack }) => {
       { wch: 30 }, // Email
       { wch: 15 }, // Username
       { wch: 15 }, // Student ID
-      { wch: 12 }, // Department
       { wch: 10 }, // Batch
       { wch: 10 }, // Division
+      { wch: 10 }, // Semester
+      { wch: 10 }, // Role
       { wch: 15 }  // Created At
     ];
     worksheet['!cols'] = columnWidths;
 
     // Add the worksheet to workbook
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Students Data');
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'CSE Students Data');
 
     // Generate filename with current date
     const currentDate = new Date().toISOString().split('T')[0];
-    const filename = `students_data_${currentDate}.xlsx`;
+    const filename = `cse_students_data_${currentDate}.xlsx`;
 
     // Download the file
     XLSX.writeFile(workbook, filename);
@@ -330,9 +361,10 @@ const StudentManagement = ({ onBack }) => {
 
   const clearFilters = () => {
     setSearchTerm('');
-    setDepartmentFilter('All');
     setBatchFilter('All');
     setDivisionFilter('All');
+    setSemesterFilter('All');
+    setRoleFilter('All');
   };
 
   const renderModal = (isVisible, onClose, title, children) => {
@@ -403,32 +435,49 @@ const StudentManagement = ({ onBack }) => {
         </div>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">Student ID *</label>
-        <input
-          type="text"
-          value={formData.student_id}
-          onChange={(e) => setFormData({ ...formData, student_id: e.target.value })}
-          className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-          required
-        />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">Department *</label>
+          <label className="block text-sm font-medium text-gray-300 mb-2">Student ID *</label>
+          <input
+            type="text"
+            value={formData.student_id}
+            onChange={(e) => setFormData({ ...formData, student_id: e.target.value })}
+            className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">Role *</label>
           <select
-            value={formData.department}
-            onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+            value={formData.role}
+            onChange={(e) => setFormData({ ...formData, role: e.target.value })}
             className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             required
           >
-            <option value="">Select Department</option>
-            {departments.map(dept => (
-              <option key={dept} value={dept}>{dept}</option>
+            {roles.map(role => (
+              <option key={role} value={role}>{role}</option>
             ))}
           </select>
         </div>
+      </div>
+
+      {/* Department field - hidden but always CSE */}
+      <input type="hidden" value="CSE" />
+      
+      {/* Display CSE as read-only info */}
+      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+        <div className="flex items-center space-x-3">
+          <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+            <span className="text-white text-sm font-bold">CSE</span>
+          </div>
+          <div>
+            <p className="text-blue-400 font-medium">Computer Science & Engineering Department</p>
+            <p className="text-blue-300 text-sm">All students will be added to CSE department</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">Batch *</label>
           <select
@@ -453,7 +502,21 @@ const StudentManagement = ({ onBack }) => {
           >
             <option value="">Select Division</option>
             {divisions.map(div => (
-              <option key={div} value={div}>{div}</option>
+              <option key={div} value={div}>Division {div}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">Semester *</label>
+          <select
+            value={formData.semester}
+            onChange={(e) => setFormData({ ...formData, semester: e.target.value })}
+            className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            required
+          >
+            <option value="">Select Semester</option>
+            {semesters.map(sem => (
+              <option key={sem} value={sem}>Semester {sem}</option>
             ))}
           </select>
         </div>
@@ -476,7 +539,7 @@ const StudentManagement = ({ onBack }) => {
           disabled={formLoading}
           className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-lg transition-colors"
         >
-          {formLoading ? 'Saving...' : showAddModal ? 'Add Student' : 'Update Student'}
+          {formLoading ? 'Saving...' : showAddModal ? 'Add CSE Student' : 'Update Student'}
         </button>
       </div>
     </form>
@@ -487,7 +550,7 @@ const StudentManagement = ({ onBack }) => {
       <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-400">Loading students...</p>
+          <p className="text-gray-400">Loading CSE students...</p>
         </div>
       </div>
     );
@@ -509,12 +572,12 @@ const StudentManagement = ({ onBack }) => {
               </button>
             )}
             
-            <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-blue-600 rounded-xl flex items-center justify-center">
+            <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
               <HiUserGroup className="text-2xl text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-white">Student Management</h1>
-              <p className="text-gray-400">Manage student accounts and information</p>
+              <h1 className="text-3xl font-bold text-white">CSE Student Management</h1>
+              <p className="text-gray-400">Manage Computer Science & Engineering students</p>
             </div>
           </div>
 
@@ -523,7 +586,7 @@ const StudentManagement = ({ onBack }) => {
               <button
                 onClick={handleDownloadTemplate}
                 className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
-                title="Download Template"
+                title="Download CSE Template"
               >
                 <HiDownload className="text-lg" />
                 <span>Template</span>
@@ -532,7 +595,7 @@ const StudentManagement = ({ onBack }) => {
               <button
                 onClick={handleDownloadStudentData}
                 className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-colors"
-                title="Download Student Data"
+                title="Download CSE Student Data"
               >
                 <HiDownload className="text-lg" />
                 <span>Export Data</span>
@@ -561,7 +624,7 @@ const StudentManagement = ({ onBack }) => {
               className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl transition-colors"
             >
               <HiPlus className="text-lg" />
-              <span className="font-medium">Add Student</span>
+              <span className="font-medium">Add CSE Student</span>
             </button>
           </div>
         </div>
@@ -572,9 +635,9 @@ const StudentManagement = ({ onBack }) => {
           </div>
         )}
 
-        {/* Filters */}
+        {/* Filters - removed department filter */}
         <div className="bg-gray-800 rounded-2xl p-6 mb-8">
-          <h3 className="text-lg font-semibold text-white mb-4">Filter Students</h3>
+          <h3 className="text-lg font-semibold text-white mb-4">Filter CSE Students</h3>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Search</label>
@@ -588,20 +651,6 @@ const StudentManagement = ({ onBack }) => {
                   className="w-full bg-gray-700 border border-gray-600 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Department</label>
-              <select
-                value={departmentFilter}
-                onChange={(e) => setDepartmentFilter(e.target.value)}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="All">All Departments</option>
-                {departments.map(dept => (
-                  <option key={dept} value={dept}>{dept}</option>
-                ))}
-              </select>
             </div>
 
             <div>
@@ -633,25 +682,51 @@ const StudentManagement = ({ onBack }) => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">&nbsp;</label>
-              <button
-                onClick={clearFilters}
-                className="w-full bg-gray-600 hover:bg-gray-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+              <label className="block text-sm font-medium text-gray-300 mb-2">Semester</label>
+              <select
+                value={semesterFilter}
+                onChange={(e) => setSemesterFilter(e.target.value)}
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                Clear Filters
-              </button>
+                <option value="All">All Semesters</option>
+                {semesters.map(sem => (
+                  <option key={sem} value={sem}>Semester {sem}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Role</label>
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value)}
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="All">All Roles</option>
+                {roles.map(role => (
+                  <option key={role} value={role}>{role}</option>
+                ))}
+              </select>
             </div>
           </div>
           
-          <div className="mt-4 text-sm text-gray-400">
-            Showing {filteredStudents.length} of {students.length} students
+          <div className="flex items-center justify-between mt-4">
+            <div className="text-sm text-gray-400">
+              Showing {filteredStudents.length} of {students.length} CSE students
+            </div>
+            <button
+              onClick={clearFilters}
+              className="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+            >
+              Clear Filters
+            </button>
           </div>
         </div>
 
-        {/* Students Table */}
+        {/* Students Table - removed department column */}
         <div className="bg-gray-800 rounded-2xl overflow-hidden">
           <div className="p-6 border-b border-gray-700">
-            <h2 className="text-xl font-bold text-white">Students ({filteredStudents.length})</h2>
+            <h2 className="text-xl font-bold text-white">CSE Students ({filteredStudents.length})</h2>
           </div>
           
           <div className="overflow-x-auto">
@@ -660,9 +735,10 @@ const StudentManagement = ({ onBack }) => {
                 <tr>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Student</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Student ID</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Department</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Batch</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Division</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Semester</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Role</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Actions</th>
                 </tr>
               </thead>
@@ -678,11 +754,6 @@ const StudentManagement = ({ onBack }) => {
                     </td>
                     <td className="px-6 py-4 text-gray-300">{student.student_id}</td>
                     <td className="px-6 py-4">
-                      <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-sm">
-                        {student.department}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
                       <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded text-sm">
                         {student.batch}
                       </span>
@@ -690,6 +761,20 @@ const StudentManagement = ({ onBack }) => {
                     <td className="px-6 py-4">
                       <span className="bg-purple-500/20 text-purple-400 px-2 py-1 rounded text-sm">
                         Div {student.div}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="bg-indigo-500/20 text-indigo-400 px-2 py-1 rounded text-sm">
+                        Sem {student.semester}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2 py-1 rounded text-sm ${
+                        student.role === 'Admin' 
+                          ? 'bg-red-500/20 text-red-400' 
+                          : 'bg-gray-500/20 text-gray-400'
+                      }`}>
+                        {student.role}
                       </span>
                     </td>
                     <td className="px-6 py-4">
@@ -726,25 +811,25 @@ const StudentManagement = ({ onBack }) => {
           {filteredStudents.length === 0 && (
             <div className="text-center py-12">
               <HiUserGroup className="mx-auto text-4xl text-gray-400 mb-4" />
-              <h3 className="text-xl font-semibold text-white mb-2">No Students Found</h3>
+              <h3 className="text-xl font-semibold text-white mb-2">No CSE Students Found</h3>
               <p className="text-gray-400">
-                {students.length === 0 ? 'No students have been added yet.' : 'No students match your current filters.'}
+                {students.length === 0 ? 'No CSE students have been added yet.' : 'No CSE students match your current filters.'}
               </p>
             </div>
           )}
         </div>
 
         {/* Add Student Modal */}
-        {renderModal(showAddModal, () => setShowAddModal(false), 'Add New Student', renderStudentForm())}
+        {renderModal(showAddModal, () => setShowAddModal(false), 'Add New CSE Student', renderStudentForm())}
 
         {/* Edit Student Modal */}
-        {renderModal(showEditModal, () => setShowEditModal(false), 'Edit Student', renderStudentForm())}
+        {renderModal(showEditModal, () => setShowEditModal(false), 'Edit CSE Student', renderStudentForm())}
 
-        {/* View Student Modal */}
+        {/* View Student Modal - removed department display */}
         {renderModal(
           showViewModal,
           () => setShowViewModal(false),
-          'Student Details',
+          'CSE Student Details',
           selectedStudent && (
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -767,13 +852,38 @@ const StudentManagement = ({ onBack }) => {
                   <p className="text-white">{selectedStudent.student_id}</p>
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              
+              {/* CSE Department Display */}
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                    <span className="text-white text-sm font-bold">CSE</span>
+                  </div>
+                  <div>
+                    <p className="text-blue-400 font-medium">Computer Science & Engineering</p>
+                    <p className="text-blue-300 text-sm">Department</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">Department</label>
-                  <span className="bg-blue-500/20 text-blue-400 px-3 py-1 rounded-full text-sm">
-                    {selectedStudent.department}
+                  <label className="block text-sm font-medium text-gray-400 mb-1">Role</label>
+                  <span className={`px-3 py-1 rounded-full text-sm ${
+                    selectedStudent.role === 'Admin' 
+                      ? 'bg-red-500/20 text-red-400' 
+                      : 'bg-gray-500/20 text-gray-400'
+                  }`}>
+                    {selectedStudent.role}
                   </span>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">Created At</label>
+                  <p className="text-white">{new Date(selectedStudent.createdAt).toLocaleDateString()}</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-1">Batch</label>
                   <span className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-sm">
@@ -786,10 +896,12 @@ const StudentManagement = ({ onBack }) => {
                     Division {selectedStudent.div}
                   </span>
                 </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1">Created At</label>
-                <p className="text-white">{new Date(selectedStudent.createdAt).toLocaleDateString()}</p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">Semester</label>
+                  <span className="bg-indigo-500/20 text-indigo-400 px-3 py-1 rounded-full text-sm">
+                    Semester {selectedStudent.semester}
+                  </span>
+                </div>
               </div>
             </div>
           )
