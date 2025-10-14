@@ -12,9 +12,6 @@ const LoginPage = () => {
     const [isLoading, setIsLoading] = useState(false);
     const navigate = useNavigate();
 
-    // Admin user ID for comparison
-    const ADMIN_USER_ID = '68ad4516c3be4979ebac1d49';
-
     const handleLogin = async (e) => {
         e.preventDefault();
         setError('');
@@ -31,19 +28,19 @@ const LoginPage = () => {
             console.log('✅ Login response:', response);
 
             if (response.success) {
-                // Store user information
+                // Store user information based on the updated user schema
                 localStorage.setItem('currentUser', username);
                 localStorage.setItem('userId', response.userId);
                 
                 const userData = {
                     _id: response.userId,
-                    name: response.name || username,
-                    email: response.email || `${username}@example.com`,
-                    username: username,
-                    role: response.role,
+                    name: response.name,
+                    email: response.email,
+                    username: response.username,
+                    role: response.role, // Now comes from database (Admin/Student)
                     department: response.department,
                     semester: response.semester,
-                    div: response.div,
+                    division: response.division, // Updated field name
                     batch: response.batch,
                     student_id: response.student_id
                 };
@@ -51,12 +48,11 @@ const LoginPage = () => {
                 localStorage.setItem('user', JSON.stringify(userData));
                 localStorage.setItem('token', btoa(JSON.stringify(userData)));
                 
-                console.log('🔍 User ID from response:', response.userId);
-                console.log('🔍 Admin ID for comparison:', ADMIN_USER_ID);
-                console.log('🔍 Is Admin?', response.userId === ADMIN_USER_ID);
+                console.log('🔍 User role from response:', response.role);
+                console.log('🔍 User data:', userData);
                 
-                // Navigate based on user ID
-                if (response.userId === ADMIN_USER_ID) {
+                // Navigate based on role from database (not hardcoded user ID)
+                if (response.role === 'admin' || userData.role === 'Admin') {
                     console.log('✅ Navigating to admin dashboard');
                     navigate('/admin/dashboard');
                 } else {
@@ -228,12 +224,8 @@ const LoginPage = () => {
                                 'Sign In'
                             )}
                         </button>
-
-                        
                     </form>
                 </div>
-
-
             </div>
         </div>
     );

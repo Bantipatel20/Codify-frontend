@@ -1,7 +1,7 @@
 // src/App.js
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import LandingPage from './components/LandingPage';
+
 import LoginPage from './components/LoginPage';
 import AdminDashboard from './components/admin/AdminDashboard';
 import ClientLayout from './components/client/ClientLayout';
@@ -23,9 +23,8 @@ const App = () => {
     return (
         <Router>
             <Routes>
-                {/* Public Routes */}
-                <Route path="/" element={<LandingPage />} />
-                <Route path="/login" element={<LoginPage />} />
+                
+                <Route path="/" element={<LoginPage />} />
                 
                 {/* Admin Routes */}
                 <Route path="/admin/dashboard" element={<AdminDashboard />} />
