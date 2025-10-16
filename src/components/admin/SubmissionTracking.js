@@ -70,21 +70,12 @@ const SubmissionTracking = ({ onBack }) => {
         setProblems(response.data.data || []);
         console.log(`✅ Loaded ${response.data.data?.length || 0} problems`);
       } else {
-        console.warn('⚠️ Problems API returned unsuccessful response, using fallback');
-        setProblems([
-          { _id: '507f1f77bcf86cd799439011', title: 'Two Sum' },
-          { _id: '507f1f77bcf86cd799439012', title: 'Add Two Numbers' },
-          { _id: '507f1f77bcf86cd799439013', title: 'Longest Substring' }
-        ]);
+        console.warn('⚠️ Problems API returned unsuccessful response');
+        setError('Failed to load problems data');
       }
     } catch (err) {
       console.error('❌ Error fetching problems:', err);
-      // Use fallback data
-      setProblems([
-        { _id: '507f1f77bcf86cd799439011', title: 'Two Sum' },
-        { _id: '507f1f77bcf86cd799439012', title: 'Add Two Numbers' },
-        { _id: '507f1f77bcf86cd799439013', title: 'Longest Substring' }
-      ]);
+      setError('Failed to load problems data');
     }
   };
 
@@ -97,21 +88,12 @@ const SubmissionTracking = ({ onBack }) => {
         setUsers(response.data.data || []);
         console.log(`✅ Loaded ${response.data.data?.length || 0} users`);
       } else {
-        console.warn('⚠️ Users API returned unsuccessful response, using fallback');
-        setUsers([
-          { _id: '1', username: '23cs058', name: 'John Doe' },
-          { _id: '2', username: '23cs060', name: 'Jane Smith' },
-          { _id: '3', username: '23cs042', name: 'Bob Johnson' }
-        ]);
+        console.warn('⚠️ Users API returned unsuccessful response');
+        setError('Failed to load users data');
       }
     } catch (err) {
       console.error('❌ Error fetching users:', err);
-      // Use fallback data
-      setUsers([
-        { _id: '1', username: '23cs058', name: 'John Doe' },
-        { _id: '2', username: '23cs060', name: 'Jane Smith' },
-        { _id: '3', username: '23cs042', name: 'Bob Johnson' }
-      ]);
+      setError('Failed to load users data');
     }
   };
 
@@ -203,29 +185,56 @@ const SubmissionTracking = ({ onBack }) => {
   };
 
   const getProblemTitle = (problemId) => {
+    if (!problemId) {
+      return 'Unknown Problem';
+    }
+    
     const problem = problems.find(p => p._id === problemId);
-    return problem ? problem.title : `Problem ${problemId?.slice(-6) || 'Unknown'}`;
+    return problem ? problem.title : `Problem ${typeof problemId === 'string' ? problemId.slice(-6) : 'Unknown'}`;
   };
 
   const getUserDisplay = (userId) => {
-    if (typeof userId === 'object' && userId.username) {
+    // Handle case where userId is already a user object with username
+    if (typeof userId === 'object' && userId && userId.username) {
       return userId.username;
     }
+    
+    // Handle case where userId is null or undefined
+    if (!userId) {
+      return 'Unknown User';
+    }
+    
+    // Find user by ID
     const user = users.find(u => u._id === userId);
-    return user ? user.username : `User ${userId?.slice(-6) || 'Unknown'}`;
+    
+    // Return username if user found, otherwise return a fallback
+    if (user && user.username) {
+      return user.username;
+    }
+    
+    // Fallback for when user is not found
+    return `User ${typeof userId === 'string' ? userId.slice(-6) : 'Unknown'}`;
   };
 
   const formatDate = (date) => {
-    return new Date(date).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    if (!date) return 'Unknown Date';
+    
+    try {
+      return new Date(date).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (err) {
+      return 'Invalid Date';
+    }
   };
 
   const getLanguageDisplayName = (language) => {
+    if (!language) return 'Unknown';
+    
     const languageMap = {
       'javascript': 'JavaScript',
       'python': 'Python',
@@ -239,20 +248,36 @@ const SubmissionTracking = ({ onBack }) => {
     return languageMap[language] || language.charAt(0).toUpperCase() + language.slice(1);
   };
 
-  // Filter submissions
+  // Filter submissions with null safety
   const filteredSubmissions = submissions.filter(submission => {
+    if (!submission) return false;
+    
     const matchesProblem = selectedProblem === 'All' || submission.problemId === selectedProblem;
     const matchesStatus = statusFilter === 'All' || submission.status === statusFilter;
-    const matchesUser = selectedUser === 'All' || 
-      (typeof submission.userId === 'object' ? submission.userId._id === selectedUser : submission.userId === selectedUser);
+    
+    // Enhanced user matching with null safety
+    let matchesUser = true;
+    if (selectedUser !== 'All') {
+      if (typeof submission.userId === 'object' && submission.userId) {
+        matchesUser = submission.userId._id === selectedUser;
+      } else if (submission.userId) {
+        matchesUser = submission.userId === selectedUser;
+      } else {
+        matchesUser = false;
+      }
+    }
     
     let matchesDate = true;
-    if (dateRange !== 'All') {
-      const submissionDate = new Date(submission.submittedAt);
-      const now = new Date();
-      const daysAgo = parseInt(dateRange);
-      const cutoffDate = new Date(now.getTime() - (daysAgo * 24 * 60 * 60 * 1000));
-      matchesDate = submissionDate >= cutoffDate;
+    if (dateRange !== 'All' && submission.submittedAt) {
+      try {
+        const submissionDate = new Date(submission.submittedAt);
+        const now = new Date();
+        const daysAgo = parseInt(dateRange);
+        const cutoffDate = new Date(now.getTime() - (daysAgo * 24 * 60 * 60 * 1000));
+        matchesDate = submissionDate >= cutoffDate;
+      } catch (err) {
+        matchesDate = true; // If date parsing fails, include the submission
+      }
     }
     
     return matchesProblem && matchesStatus && matchesUser && matchesDate;
@@ -263,14 +288,14 @@ const SubmissionTracking = ({ onBack }) => {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedSubmissions = filteredSubmissions.slice(startIndex, startIndex + itemsPerPage);
 
-  // Statistics
+  // Statistics with null safety
   const stats = {
     total: filteredSubmissions.length,
-    accepted: filteredSubmissions.filter(s => s.status === 'accepted').length,
-    failed: filteredSubmissions.filter(s => s.status !== 'accepted' && s.status !== 'pending' && s.status !== 'running').length,
-    pending: filteredSubmissions.filter(s => s.status === 'pending' || s.status === 'running').length,
+    accepted: filteredSubmissions.filter(s => s && s.status === 'accepted').length,
+    failed: filteredSubmissions.filter(s => s && s.status && s.status !== 'accepted' && s.status !== 'pending' && s.status !== 'running').length,
+    pending: filteredSubmissions.filter(s => s && (s.status === 'pending' || s.status === 'running')).length,
     avgScore: filteredSubmissions.length > 0 ? 
-      Math.round(filteredSubmissions.reduce((acc, s) => acc + (s.score || 0), 0) / filteredSubmissions.length) : 0
+      Math.round(filteredSubmissions.reduce((acc, s) => acc + (s?.score || 0), 0) / filteredSubmissions.length) : 0
   };
 
   if (loading) {
@@ -313,7 +338,12 @@ const SubmissionTracking = ({ onBack }) => {
             <div className="flex items-center justify-between">
               <span>{error}</span>
               <button 
-                onClick={() => { setError(null); fetchSubmissions(); }}
+                onClick={() => { 
+                  setError(null); 
+                  fetchSubmissions(); 
+                  fetchProblems();
+                  fetchUsers();
+                }}
                 className="text-red-400 hover:text-red-300"
               >
                 <HiRefresh className="text-lg" />
@@ -322,324 +352,347 @@ const SubmissionTracking = ({ onBack }) => {
           </div>
         )}
 
-        {/* Filters */}
-        <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-8 mb-8">
-          {/* Filter Header */}
-          <div className="flex items-center space-x-3 mb-6">
-            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-              <HiFilter className="text-white text-lg" />
-            </div>
-            <h3 className="text-xl font-bold text-white">Filter Submissions</h3>
-          </div>
-          
-          {/* Filter Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
-            {/* Problem Filter */}
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-gray-300 mb-3">
-                Problem
-              </label>
-              <div className="relative">
-                <select 
-                  value={selectedProblem}
-                  onChange={(e) => setSelectedProblem(e.target.value)}
-                  className="w-full bg-gray-800/60 border border-gray-600/50 rounded-xl px-4 py-3.5 text-white 
-                           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent 
-                           transition-all duration-300 hover:bg-gray-800/80 appearance-none cursor-pointer"
-                >
-                  <option value="All">All Problems</option>
-                  {problems.map((problem) => (
-                    <option key={problem._id} value={problem._id}>{problem.title}</option>
-                  ))}
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-
-            {/* Status Filter */}
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-gray-300 mb-3">
-                Status
-              </label>
-              <div className="relative">
-                <select 
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full bg-gray-800/60 border border-gray-600/50 rounded-xl px-4 py-3.5 text-white 
-                           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent 
-                           transition-all duration-300 hover:bg-gray-800/80 appearance-none cursor-pointer"
-                >
-                  <option value="All">All Statuses</option>
-                  <option value="accepted">✅ Accepted</option>
-                  <option value="wrong_answer">❌ Wrong Answer</option>
-                  <option value="compilation_error">⚠️ Compilation Error</option>
-                  <option value="runtime_error">💥 Runtime Error</option>
-                  <option value="time_limit_exceeded">⏰ Time Limit Exceeded</option>
-                  <option value="memory_limit_exceeded">🧠 Memory Limit Exceeded</option>
-                  <option value="pending">⏳ Pending</option>
-                  <option value="running">🔄 Running</option>
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-
-            {/* Student Filter */}
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-gray-300 mb-3">
-                Student
-              </label>
-              <div className="relative">
-                <select 
-                  value={selectedUser}
-                  onChange={(e) => setSelectedUser(e.target.value)}
-                  className="w-full bg-gray-800/60 border border-gray-600/50 rounded-xl px-4 py-3.5 text-white 
-                           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent 
-                           transition-all duration-300 hover:bg-gray-800/80 appearance-none cursor-pointer"
-                >
-                  <option value="All">All Students</option>
-                  {users.map((user) => (
-                    <option key={user._id} value={user._id}>
-                      {user.username} {user.name && `- ${user.name}`}
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-
-            {/* Date Range Filter */}
-            <div className="space-y-2">
-              <label className="block text-sm font-semibold text-gray-300 mb-3">
-                Date Range
-              </label>
-              <div className="relative">
-                <select 
-                  value={dateRange}
-                  onChange={(e) => setDateRange(e.target.value)}
-                  className="w-full bg-gray-800/60 border border-gray-600/50 rounded-xl px-4 py-3.5 text-white 
-                           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent 
-                           transition-all duration-300 hover:bg-gray-800/80 appearance-none cursor-pointer"
-                >
-                  <option value="All">All Time</option>
-                  <option value="1">📅 Last 24 hours</option>
-                  <option value="7">📅 Last 7 days</option>
-                  <option value="30">📅 Last 30 days</option>
-                  <option value="90">📅 Last 90 days</option>
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Filter Actions */}
-          <div className="flex flex-wrap items-center justify-between mt-8 pt-6 border-t border-white/10">
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-400">
-                {filteredSubmissions.length} submissions found
-              </span>
-              {(selectedProblem !== 'All' || statusFilter !== 'All' || selectedUser !== 'All' || dateRange !== 'All') && (
-                <button
-                  onClick={() => {
-                    setSelectedProblem('All');
-                    setStatusFilter('All');
-                    setSelectedUser('All');
-                    setDateRange('All');
-                    setCurrentPage(1);
-                  }}
-                  className="text-sm text-blue-400 hover:text-blue-300 transition-colors font-medium"
-                >
-                  Clear all filters
-                </button>
-              )}
-            </div>
-            
-            <button
-              onClick={() => { setError(null); fetchSubmissions(); }}
-              className="flex items-center space-x-2 px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 
-                       border border-blue-500/30 text-blue-400 rounded-xl transition-all duration-300 
-                       hover:scale-105 active:scale-95"
-            >
-              <HiRefresh className="text-lg" />
-              <span className="font-medium">Refresh</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
-          {[
-            { label: 'Total Submissions', value: stats.total, color: 'from-blue-500 to-cyan-500', icon: HiChartBar },
-            { label: 'Accepted', value: stats.accepted, color: 'from-green-500 to-emerald-500', icon: HiCheckCircle },
-            { label: 'Failed', value: stats.failed, color: 'from-red-500 to-pink-500', icon: HiXCircle },
-            { label: 'Pending', value: stats.pending, color: 'from-yellow-500 to-orange-500', icon: HiClock },
-            { label: 'Avg Score', value: `${stats.avgScore}%`, color: 'from-purple-500 to-indigo-500', icon: HiChartBar }
-          ].map((stat, index) => (
-            <div key={index} className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl p-6">
-              <div className={`w-12 h-12 bg-gradient-to-r ${stat.color} rounded-lg flex items-center justify-center mb-4`}>
-                <stat.icon className="text-white text-xl" />
-              </div>
-              <h3 className="text-2xl font-bold text-white mb-1">{stat.value}</h3>
-              <p className="text-gray-400 text-sm">{stat.label}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* No Data Message */}
-        {submissions.length === 0 && !loading && (
-          <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-12 text-center">
+        {/* Show message if no data is available */}
+        {!loading && (submissions.length === 0 || problems.length === 0 || users.length === 0) && (
+          <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-12 text-center mb-8">
             <div className="w-16 h-16 bg-gray-600 rounded-full flex items-center justify-center mx-auto mb-4">
-              <HiChartBar className="text-2xl text-gray-400" />
+              <HiExclamationCircle className="text-2xl text-gray-400" />
             </div>
-            <h3 className="text-xl font-bold text-white mb-2">No Submissions Found</h3>
-            <p className="text-gray-400 mb-6">There are no submissions in the database yet.</p>
+            <h3 className="text-xl font-bold text-white mb-2">No Data Available</h3>
+            <p className="text-gray-400 mb-6">
+              {submissions.length === 0 && "No submissions found. "}
+              {problems.length === 0 && "No problems found. "}
+              {users.length === 0 && "No users found. "}
+              Please check your API endpoints.
+            </p>
             <button
-              onClick={fetchSubmissions}
+              onClick={() => {
+                setError(null);
+                fetchSubmissions();
+                fetchProblems();
+                fetchUsers();
+              }}
               className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
             >
-              Refresh Data
+              Retry Loading Data
             </button>
           </div>
         )}
 
-        {/* Submissions Table */}
-        {submissions.length > 0 && (
-          <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl overflow-hidden">
-            <div className="p-6 border-b border-white/20 flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-white">
-                Recent Submissions
-              </h2>
-              <span className="text-gray-400 text-sm">
-                {filteredSubmissions.length} results
-              </span>
-            </div>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-800/50">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Student</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Problem</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Status</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Score</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Test Cases</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Language</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Submitted</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-700">
-                  {paginatedSubmissions.map((submission) => (
-                    <tr key={submission._id} className="hover:bg-white/5 transition-all duration-300">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                            <span className="text-white text-sm font-bold">
-                              {getUserDisplay(submission.userId).slice(-2)}
-                            </span>
-                          </div>
-                          <span className="text-white font-medium">{getUserDisplay(submission.userId)}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-white font-medium">{getProblemTitle(submission.problemId)}</span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className={`inline-flex items-center space-x-2 px-3 py-1 rounded-full border ${getStatusColor(submission.status)}`}>
-                          {getStatusIcon(submission.status)}
-                          <span className="text-sm font-medium">{getStatusDisplayName(submission.status)}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center space-x-2">
-                          <span className={`text-lg font-bold ${getScoreColor(submission.score || 0)}`}>
-                            {submission.score || 0}%
-                          </span>
-                          <div className="w-16 bg-gray-700 rounded-full h-2">
-                            <div 
-                              className={`h-2 rounded-full ${
-                                (submission.score || 0) >= 70 ? 'bg-green-500' : 
-                                (submission.score || 0) >= 50 ? 'bg-yellow-500' : 'bg-red-500'
-                              }`}
-                              style={{ width: `${submission.score || 0}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-gray-300">
-                          {submission.passedTestCases || 0}/{submission.totalTestCases || 0}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-gray-300">{getLanguageDisplayName(submission.language)}</span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-gray-300">{formatDate(submission.submittedAt)}</span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <button
-                          onClick={() => handleViewCode(submission)}
-                          disabled={loadingCode}
-                          className="flex items-center space-x-2 px-3 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 
-                                   border border-indigo-500/30 text-indigo-400 rounded-lg transition-all duration-300 
-                                   hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <HiCode className="text-sm" />
-                          <span className="text-sm font-medium">
-                            {loadingCode ? 'Loading...' : 'View Code'}
-                          </span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="p-6 border-t border-white/20 flex items-center justify-between">
-                <div className="text-gray-400 text-sm">
-                  Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredSubmissions.length)} of {filteredSubmissions.length} results
+        {/* Only show filters and content if we have data */}
+        {!loading && submissions.length > 0 && problems.length > 0 && users.length > 0 && (
+          <>
+            {/* Filters */}
+            <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-8 mb-8">
+              {/* Filter Header */}
+              <div className="flex items-center space-x-3 mb-6">
+                <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
+                  <HiFilter className="text-white text-lg" />
                 </div>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                    disabled={currentPage === 1}
-                    className="px-4 py-2 bg-gray-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600 transition-colors"
-                  >
-                    Previous
-                  </button>
-                  <span className="px-4 py-2 bg-blue-600 text-white rounded-lg">
-                    {currentPage} of {totalPages}
-                  </span>
-                  <button
-                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                    disabled={currentPage === totalPages}
-                    className="px-4 py-2 bg-gray-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600 transition-colors"
-                  >
-                    Next
-                  </button>
+                <h3 className="text-xl font-bold text-white">Filter Submissions</h3>
+              </div>
+              
+              {/* Filter Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
+                {/* Problem Filter */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-300 mb-3">
+                    Problem
+                  </label>
+                  <div className="relative">
+                    <select 
+                      value={selectedProblem}
+                      onChange={(e) => setSelectedProblem(e.target.value)}
+                      className="w-full bg-gray-800/60 border border-gray-600/50 rounded-xl px-4 py-3.5 text-white 
+                               focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent 
+                               transition-all duration-300 hover:bg-gray-800/80 appearance-none cursor-pointer"
+                    >
+                      <option value="All">All Problems</option>
+                      {problems.map((problem) => (
+                        <option key={problem._id} value={problem._id}>{problem.title}</option>
+                      ))}
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status Filter */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-300 mb-3">
+                    Status
+                  </label>
+                  <div className="relative">
+                    <select 
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="w-full bg-gray-800/60 border border-gray-600/50 rounded-xl px-4 py-3.5 text-white 
+                               focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent 
+                               transition-all duration-300 hover:bg-gray-800/80 appearance-none cursor-pointer"
+                    >
+                      <option value="All">All Statuses</option>
+                      <option value="accepted">✅ Accepted</option>
+                      <option value="wrong_answer">❌ Wrong Answer</option>
+                      <option value="compilation_error">⚠️ Compilation Error</option>
+                      <option value="runtime_error">💥 Runtime Error</option>
+                      <option value="time_limit_exceeded">⏰ Time Limit Exceeded</option>
+                      <option value="memory_limit_exceeded">🧠 Memory Limit Exceeded</option>
+                      <option value="pending">⏳ Pending</option>
+                      <option value="running">🔄 Running</option>
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Student Filter */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-300 mb-3">
+                    Student
+                  </label>
+                  <div className="relative">
+                    <select 
+                      value={selectedUser}
+                      onChange={(e) => setSelectedUser(e.target.value)}
+                      className="w-full bg-gray-800/60 border border-gray-600/50 rounded-xl px-4 py-3.5 text-white 
+                               focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent 
+                               transition-all duration-300 hover:bg-gray-800/80 appearance-none cursor-pointer"
+                    >
+                      <option value="All">All Students</option>
+                      {users.map((user) => (
+                        <option key={user._id} value={user._id}>
+                          {user.username} {user.name && `- ${user.name}`}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Date Range Filter */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-300 mb-3">
+                    Date Range
+                  </label>
+                  <div className="relative">
+                    <select 
+                      value={dateRange}
+                      onChange={(e) => setDateRange(e.target.value)}
+                      className="w-full bg-gray-800/60 border border-gray-600/50 rounded-xl px-4 py-3.5 text-white 
+                               focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent 
+                               transition-all duration-300 hover:bg-gray-800/80 appearance-none cursor-pointer"
+                    >
+                      <option value="All">All Time</option>
+                      <option value="1">📅 Last 24 hours</option>
+                      <option value="7">📅 Last 7 days</option>
+                      <option value="30">📅 Last 30 days</option>
+                      <option value="90">📅 Last 90 days</option>
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
                 </div>
               </div>
-            )}
-          </div>
+
+              {/* Filter Actions */}
+              <div className="flex flex-wrap items-center justify-between mt-8 pt-6 border-t border-white/10">
+                <div className="flex items-center space-x-4">
+                  <span className="text-sm text-gray-400">
+                    {filteredSubmissions.length} submissions found
+                  </span>
+                  {(selectedProblem !== 'All' || statusFilter !== 'All' || selectedUser !== 'All' || dateRange !== 'All') && (
+                    <button
+                      onClick={() => {
+                        setSelectedProblem('All');
+                        setStatusFilter('All');
+                        setSelectedUser('All');
+                        setDateRange('All');
+                        setCurrentPage(1);
+                      }}
+                      className="text-sm text-blue-400 hover:text-blue-300 transition-colors font-medium"
+                    >
+                      Clear all filters
+                    </button>
+                  )}
+                </div>
+                
+                <button
+                  onClick={() => { 
+                    setError(null); 
+                    fetchSubmissions();
+                    fetchProblems();
+                    fetchUsers();
+                  }}
+                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 
+                           border border-blue-500/30 text-blue-400 rounded-xl transition-all duration-300 
+                           hover:scale-105 active:scale-95"
+                >
+                  <HiRefresh className="text-lg" />
+                  <span className="font-medium">Refresh</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
+              {[
+                { label: 'Total Submissions', value: stats.total, color: 'from-blue-500 to-cyan-500', icon: HiChartBar },
+                { label: 'Accepted', value: stats.accepted, color: 'from-green-500 to-emerald-500', icon: HiCheckCircle },
+                { label: 'Failed', value: stats.failed, color: 'from-red-500 to-pink-500', icon: HiXCircle },
+                { label: 'Pending', value: stats.pending, color: 'from-yellow-500 to-orange-500', icon: HiClock },
+                { label: 'Avg Score', value: `${stats.avgScore}%`, color: 'from-purple-500 to-indigo-500', icon: HiChartBar }
+              ].map((stat, index) => (
+                <div key={index} className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl p-6">
+                  <div className={`w-12 h-12 bg-gradient-to-r ${stat.color} rounded-lg flex items-center justify-center mb-4`}>
+                    <stat.icon className="text-white text-xl" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-white mb-1">{stat.value}</h3>
+                  <p className="text-gray-400 text-sm">{stat.label}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Submissions Table */}
+            <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl overflow-hidden">
+              <div className="p-6 border-b border-white/20 flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-white">
+                  Recent Submissions
+                </h2>
+                <span className="text-gray-400 text-sm">
+                  {filteredSubmissions.length} results
+                </span>
+              </div>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-800/50">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Student</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Problem</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Status</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Score</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Test Cases</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Language</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Submitted</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-700">
+                    {paginatedSubmissions.map((submission) => {
+                      // Skip rendering if submission is null/undefined
+                      if (!submission) return null;
+                      
+                      return (
+                        <tr key={submission._id} className="hover:bg-white/5 transition-all duration-300">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center space-x-3">
+                              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                                <span className="text-white text-sm font-bold">
+                                  {getUserDisplay(submission.userId).slice(-2)}
+                                </span>
+                              </div>
+                              <span className="text-white font-medium">{getUserDisplay(submission.userId)}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="text-white font-medium">{getProblemTitle(submission.problemId)}</span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className={`inline-flex items-center space-x-2 px-3 py-1 rounded-full border ${getStatusColor(submission.status)}`}>
+                              {getStatusIcon(submission.status)}
+                              <span className="text-sm font-medium">{getStatusDisplayName(submission.status)}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center space-x-2">
+                              <span className={`text-lg font-bold ${getScoreColor(submission.score || 0)}`}>
+                                {submission.score || 0}%
+                              </span>
+                              <div className="w-16 bg-gray-700 rounded-full h-2">
+                                <div 
+                                  className={`h-2 rounded-full ${
+                                    (submission.score || 0) >= 70 ? 'bg-green-500' : 
+                                    (submission.score || 0) >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                                  }`}
+                                  style={{ width: `${submission.score || 0}%` }}
+                                ></div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="text-gray-300">
+                              {submission.passedTestCases || 0}/{submission.totalTestCases || 0}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="text-gray-300">{getLanguageDisplayName(submission.language)}</span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="text-gray-300">{formatDate(submission.submittedAt)}</span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <button
+                              onClick={() => handleViewCode(submission)}
+                              disabled={loadingCode}
+                              className="flex items-center space-x-2 px-3 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 
+                                       border border-indigo-500/30 text-indigo-400 rounded-lg transition-all duration-300 
+                                       hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <HiCode className="text-sm" />
+                              <span className="text-sm font-medium">
+                                {loadingCode ? 'Loading...' : 'View Code'}
+                              </span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="p-6 border-t border-white/20 flex items-center justify-between">
+                  <div className="text-gray-400 text-sm">
+                    Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredSubmissions.length)} of {filteredSubmissions.length} results
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
+                      className="px-4 py-2 bg-gray-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600 transition-colors"
+                    >
+                      Previous
+                    </button>
+                    <span className="px-4 py-2 bg-blue-600 text-white rounded-lg">
+                      {currentPage} of {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage === totalPages}
+                      className="px-4 py-2 bg-gray-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600 transition-colors"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
         )}
 
         {/* Code Modal */}

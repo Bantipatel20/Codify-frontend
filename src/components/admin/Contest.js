@@ -35,7 +35,7 @@ const Contest = ({ onBack }) => {
       semester: [],
       division: [],
       batch: [],
-      rollNumberType: 'all' // 'all', 'even', 'odd' - based on last digit of roll number
+      rollNumberType: 'all'
     },
     manualStudents: []
   });
@@ -76,6 +76,49 @@ const Contest = ({ onBack }) => {
   const semesters = [1, 2, 3, 4, 5, 6, 7, 8];
   const divisions = [1, 2, 3, 4];
   const batches = ['A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4', 'C1', 'C2', 'C3', 'C4', 'D1', 'D2', 'D3', 'D4'];
+
+  // Helper function to format date for datetime-local input
+  const formatDateForInput = (dateString) => {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '';
+      
+      // Format as YYYY-MM-DDTHH:mm for datetime-local input
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    } catch (error) {
+      console.error('Error formatting date for input:', error);
+      return '';
+    }
+  };
+
+  // Helper function to validate dates
+  const validateDates = (startDate, endDate) => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const now = new Date();
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return 'Invalid date format';
+    }
+
+    if (start >= end) {
+      return 'End date must be after start date';
+    }
+
+    // Allow past dates for editing existing contests
+    // if (start < now) {
+    //   return 'Start date cannot be in the past';
+    // }
+
+    return null;
+  };
 
   // Helper function to check if roll number ends with even or odd digit
   const getRollNumberType = (studentId) => {
@@ -282,13 +325,13 @@ const Contest = ({ onBack }) => {
   const handleEditContest = (contest) => {
     setSelectedContest(contest);
     setFormData({
-      title: contest.title,
-      description: contest.description,
-      startDate: new Date(contest.startDate).toISOString().slice(0, 16),
-      endDate: new Date(contest.endDate).toISOString().slice(0, 16),
-      duration: contest.duration,
-      rules: contest.rules,
-      maxParticipants: contest.maxParticipants,
+      title: contest.title || '',
+      description: contest.description || '',
+      startDate: formatDateForInput(contest.startDate),
+      endDate: formatDateForInput(contest.endDate),
+      duration: contest.duration || '',
+      rules: contest.rules || '',
+      maxParticipants: contest.maxParticipants || 100,
       problems: contest.problems || [],
       participantSelection: contest.participantSelection || 'manual',
       filterCriteria: contest.filterCriteria || {
@@ -338,117 +381,164 @@ const Contest = ({ onBack }) => {
     }
   };
 
-  // src/components/admin/Contest.js - Updated handleSubmit function
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setFormLoading(true);
+  // Updated handleSubmit function with proper date validation and formatting
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setFormLoading(true);
 
-  try {
-    const currentUser = JSON.parse(localStorage.getItem('user'));
-    if (!currentUser) {
-      alert('User not found. Please refresh and try again.');
-      return;
-    }
-
-    const allProblems = [
-      ...formData.problems.filter(p => !p.problemId?.startsWith('manual_')),
-      ...manualProblems.map((mp, index) => ({
-        problemId: mp.problemId || `manual_${Date.now()}_${index}`,
-        title: mp.title,
-        difficulty: mp.difficulty,
-        category: mp.category,
-        points: mp.points,
-        manualProblem: {
-          description: mp.description,
-          inputFormat: mp.inputFormat,
-          outputFormat: mp.outputFormat,
-          constraints: mp.constraints,
-          sampleInput: mp.sampleInput,
-          sampleOutput: mp.sampleOutput,
-          explanation: mp.explanation,
-          testCases: mp.testCases
-        }
-      }))
-    ];
-
-    // FIXED: Ensure filterCriteria arrays are properly formatted and don't contain empty values
-    const cleanFilterCriteria = {
-      department: Array.isArray(formData.filterCriteria.department) 
-        ? formData.filterCriteria.department.filter(d => d && d.trim() !== '') 
-        : [],
-      semester: Array.isArray(formData.filterCriteria.semester) 
-        ? formData.filterCriteria.semester.filter(s => s !== null && s !== undefined && s !== '') 
-        : [],
-      division: Array.isArray(formData.filterCriteria.division) 
-        ? formData.filterCriteria.division.filter(d => d !== null && d !== undefined && d !== '') 
-        : [],
-      batch: Array.isArray(formData.filterCriteria.batch) 
-        ? formData.filterCriteria.batch.filter(b => b && b.trim() !== '') 
-        : [],
-      rollNumberType: formData.filterCriteria.rollNumberType || 'all'
-    };
-
-    console.log('Clean filter criteria:', cleanFilterCriteria);
-
-    const contestData = {
-      title: formData.title.trim(),
-      description: formData.description.trim(),
-      startDate: new Date(formData.startDate).toISOString(),
-      endDate: new Date(formData.endDate).toISOString(),
-      duration: formData.duration.trim(),
-      rules: formData.rules?.trim() || '',
-      maxParticipants: parseInt(formData.maxParticipants) || 100,
-      problems: allProblems,
-      createdBy: currentUser._id,
-      participantSelection: formData.participantSelection, // This should be 'manual' or 'automatic'
-      filterCriteria: cleanFilterCriteria,
-      settings: {
-        allowLateSubmission: false,
-        showLeaderboard: true,
-        showLeaderboardDuringContest: true,
-        freezeLeaderboard: false,
-        freezeTime: 60,
-        allowViewProblemsBeforeStart: false,
-        penaltyPerWrongSubmission: 0
+    try {
+      // Validate required fields
+      if (!formData.title.trim()) {
+        alert('Contest title is required');
+        return;
       }
-    };
 
-    // Add manual students only if manual selection
-    if (formData.participantSelection === 'manual' && formData.manualStudents.length > 0) {
-      contestData.manualStudents = formData.manualStudents;
+      if (!formData.description.trim()) {
+        alert('Contest description is required');
+        return;
+      }
+
+      if (!formData.startDate || !formData.endDate) {
+        alert('Start date and end date are required');
+        return;
+      }
+
+      // Validate dates
+      const dateValidationError = validateDates(formData.startDate, formData.endDate);
+      if (dateValidationError) {
+        alert(dateValidationError);
+        return;
+      }
+
+      const currentUser = JSON.parse(localStorage.getItem('user'));
+      if (!currentUser) {
+        alert('User not found. Please refresh and try again.');
+        return;
+      }
+
+      // Prepare problems array
+      const allProblems = [
+        ...formData.problems.filter(p => !p.problemId?.startsWith('manual_')),
+        ...manualProblems.map((mp, index) => ({
+          problemId: mp.problemId || `manual_${Date.now()}_${index}`,
+          title: mp.title,
+          difficulty: mp.difficulty,
+          category: mp.category,
+          points: mp.points,
+          manualProblem: {
+            description: mp.description,
+            inputFormat: mp.inputFormat,
+            outputFormat: mp.outputFormat,
+            constraints: mp.constraints,
+            sampleInput: mp.sampleInput,
+            sampleOutput: mp.sampleOutput,
+            explanation: mp.explanation,
+            testCases: mp.testCases
+          }
+        }))
+      ];
+
+      // Clean and validate filter criteria
+      const cleanFilterCriteria = {
+        department: Array.isArray(formData.filterCriteria.department) 
+          ? formData.filterCriteria.department.filter(d => d && d.trim() !== '') 
+          : [],
+        semester: Array.isArray(formData.filterCriteria.semester) 
+          ? formData.filterCriteria.semester.filter(s => s !== null && s !== undefined && s !== '') 
+          : [],
+        division: Array.isArray(formData.filterCriteria.division) 
+          ? formData.filterCriteria.division.filter(d => d !== null && d !== undefined && d !== '') 
+          : [],
+        batch: Array.isArray(formData.filterCriteria.batch) 
+          ? formData.filterCriteria.batch.filter(b => b && b.trim() !== '') 
+          : [],
+        rollNumberType: formData.filterCriteria.rollNumberType || 'all'
+      };
+
+      // Create proper ISO date strings
+      const startDate = new Date(formData.startDate);
+      const endDate = new Date(formData.endDate);
+
+      // Validate dates again after conversion
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        alert('Invalid date format. Please check your date inputs.');
+        return;
+      }
+
+      const contestData = {
+        title: formData.title.trim(),
+        description: formData.description.trim(),
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        duration: formData.duration?.trim() || '',
+        rules: formData.rules?.trim() || '',
+        maxParticipants: parseInt(formData.maxParticipants) || 100,
+        problems: allProblems,
+        createdBy: currentUser._id,
+        participantSelection: formData.participantSelection,
+        filterCriteria: cleanFilterCriteria,
+        settings: {
+          allowLateSubmission: false,
+          showLeaderboard: true,
+          showLeaderboardDuringContest: true,
+          freezeLeaderboard: false,
+          freezeTime: 60,
+          allowViewProblemsBeforeStart: false,
+          penaltyPerWrongSubmission: 0
+        }
+      };
+
+      // Add manual students only if manual selection
+      if (formData.participantSelection === 'manual' && formData.manualStudents.length > 0) {
+        contestData.manualStudents = formData.manualStudents;
+      }
+
+      console.log('Contest data being sent:', {
+        ...contestData,
+        startDate: contestData.startDate,
+        endDate: contestData.endDate,
+        problems: contestData.problems.length,
+        filterCriteria: contestData.filterCriteria
+      });
+
+      let response;
+      if (showEditModal) {
+        response = await contestAPI.updateContest(selectedContest._id, contestData);
+      } else {
+        response = await contestAPI.createContest(contestData);
+      }
+
+      if (response.success) {
+        await fetchContests();
+        setShowCreateModal(false);
+        setShowEditModal(false);
+        resetForm();
+        alert(`Contest ${showEditModal ? 'updated' : 'created'} successfully!`);
+      } else {
+        console.error('Server response error:', response);
+        alert(`Failed to ${showEditModal ? 'update' : 'create'} contest: ${response.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('Error saving contest:', err);
+      
+      // More detailed error handling
+      let errorMessage = `Error ${showEditModal ? 'updating' : 'creating'} contest: `;
+      
+      if (err.response?.data?.error) {
+        errorMessage += err.response.data.error;
+      } else if (err.response?.data?.message) {
+        errorMessage += err.response.data.message;
+      } else if (err.message) {
+        errorMessage += err.message;
+      } else {
+        errorMessage += 'Unknown error occurred';
+      }
+      
+      alert(errorMessage);
+    } finally {
+      setFormLoading(false);
     }
-
-    console.log('Contest data being sent:', {
-      ...contestData,
-      problems: contestData.problems.length,
-      filterCriteria: contestData.filterCriteria
-    });
-
-    let response;
-    if (showEditModal) {
-      response = await contestAPI.updateContest(selectedContest._id, contestData);
-    } else {
-      response = await contestAPI.createContest(contestData);
-    }
-
-    if (response.success) {
-      await fetchContests();
-      setShowCreateModal(false);
-      setShowEditModal(false);
-      resetForm();
-      alert(`Contest ${showEditModal ? 'updated' : 'created'} successfully!`);
-    } else {
-      console.error('Server response error:', response);
-      alert(`Failed to ${showEditModal ? 'update' : 'create'} contest: ${response.error}`);
-    }
-  } catch (err) {
-    console.error('Error saving contest:', err);
-    alert(`Error ${showEditModal ? 'updating' : 'creating'} contest: ${err.message}`);
-  } finally {
-    setFormLoading(false);
-  }
-};
-
+  };
 
   const handleBulkSelectStudents = (students) => {
     const studentIds = students.map(s => s._id);
@@ -566,13 +656,19 @@ const handleSubmit = async (e) => {
   };
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    if (!dateString) return 'No date';
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid date';
+    }
   };
 
   const renderModal = (isVisible, onClose, title, children) => {

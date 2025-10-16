@@ -6,7 +6,7 @@ import { authAPI, submissionsAPI, problemsAPI } from '../../services/api';
 const Submissions = () => {
   const [submissions, setSubmissions] = useState([]);
   const [filteredSubmissions, setFilteredSubmissions] = useState([]);
-  const [problemsMap, setProblemsMap] = useState(new Map()); // Map to store problem details
+  const [problemsMap, setProblemsMap] = useState(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState('All');
@@ -26,7 +26,7 @@ const Submissions = () => {
     try {
       console.log('🔄 Fetching problems for name lookup...');
       const response = await problemsAPI.getAllProblems({
-        limit: 1000, // Get all problems
+        limit: 1000,
         page: 1
       });
 
@@ -40,7 +40,6 @@ const Submissions = () => {
       }
     } catch (err) {
       console.error('❌ Error fetching problems map:', err);
-      // Don't set error here as it's not critical
     }
   };
 
@@ -59,12 +58,12 @@ const Submissions = () => {
       
       console.log('🔄 Fetching submissions for user:', currentUser._id);
       
-      // Fetch problems map first, then submissions
       await fetchProblemsMap();
       
       const response = await submissionsAPI.getUserSubmissions(currentUser._id, {
         page: 1,
-        limit: 100
+        limit: 100,
+        latestOnly: true // Add this flag to get only latest submissions per problem
       });
       
       console.log('📊 User submissions response:', response);
@@ -161,7 +160,7 @@ const Submissions = () => {
       if (hasPendingSubmissions) {
         fetchSubmissions();
       }
-    }, 30000); // 30 seconds
+    }, 30000);
     
     setRefreshInterval(interval);
     
@@ -258,19 +257,16 @@ const Submissions = () => {
 
   // Get problem title from problemsMap
   const getProblemTitle = (problemId) => {
-    // Handle different problemId formats
     let id = problemId;
     if (typeof problemId === 'object' && problemId._id) {
       id = problemId._id;
     }
     
-    // Look up problem in the map
     const problem = problemsMap.get(id);
     if (problem) {
       return problem.title;
     }
     
-    // Fallback: convert ID to readable title if problem not found
     if (typeof id === 'string') {
       return id.split('-').map(word => 
         word.charAt(0).toUpperCase() + word.slice(1)
@@ -329,7 +325,19 @@ const Submissions = () => {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-indigo-900 to-purple-900 p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-       
+        <div className="text-center mb-12">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl mb-4">
+            <HiDocumentText className="text-2xl text-white" />
+          </div>
+          <h1 className="text-4xl font-bold text-white mb-4">My Submissions</h1>
+          <p className="text-gray-300 text-lg">Track your coding progress and view submission history</p>
+          {userProfile && (
+            <div className="mt-4 inline-flex items-center space-x-2 bg-white/10 backdrop-blur-lg border border-white/20 rounded-lg px-4 py-2">
+              <span className="text-gray-300">Student:</span>
+              <span className="text-white font-medium">{userProfile.username}</span>
+            </div>
+          )}
+        </div>
 
         {submissions.length === 0 ? (
           <div className="text-center py-12">
@@ -354,7 +362,7 @@ const Submissions = () => {
               <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-400 text-sm mb-1">Total Submissions</p>
+                    <p className="text-gray-400 text-sm mb-1">Problems Attempted</p>
                     <p className="text-2xl font-bold text-white">{submissions.length}</p>
                   </div>
                   <HiDocumentText className="text-blue-400 text-2xl" />
@@ -364,7 +372,7 @@ const Submissions = () => {
               <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-400 text-sm mb-1">Accepted</p>
+                    <p className="text-gray-400 text-sm mb-1">Solved</p>
                     <p className="text-2xl font-bold text-green-400">
                       {submissions.filter(s => s.status === 'accepted').length}
                     </p>
@@ -455,8 +463,11 @@ const Submissions = () => {
             <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl overflow-hidden">
               <div className="p-6 border-b border-white/20">
                 <h2 className="text-2xl font-bold text-white">
-                  Submission History ({filteredSubmissions.length})
+                  Latest Submissions ({filteredSubmissions.length})
                 </h2>
+                <p className="text-gray-400 text-sm mt-1">
+                  Showing your most recent submission for each problem
+                </p>
               </div>
               
               <div className="overflow-x-auto">
@@ -468,13 +479,13 @@ const Submissions = () => {
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Score</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Test Cases</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Language</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Submitted</th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Last Updated</th>
                       <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-700">
                     {filteredSubmissions.map((submission) => {
-                      const dateTime = formatDate(submission.submittedAt);
+                      const dateTime = formatDate(submission.updatedAt || submission.submittedAt);
                       return (
                         <tr key={submission._id} className="hover:bg-white/5 transition-all duration-300">
                           <td className="px-6 py-4">
@@ -575,7 +586,7 @@ const Submissions = () => {
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-white">
-                      My Submission Code
+                      My Latest Submission
                     </h3>
                     <div className="flex items-center space-x-4 text-sm text-gray-400 mt-1">
                       <span>Problem: {getProblemTitle(selectedSubmission.problemId)}</span>
@@ -664,12 +675,12 @@ const Submissions = () => {
                     </div>
                   </div>
                   <div className="bg-gray-800 rounded-lg p-4">
-                    <h4 className="text-sm font-semibold text-gray-300 mb-2">Submitted</h4>
+                    <h4 className="text-sm font-semibold text-gray-300 mb-2">Last Updated</h4>
                     <p className="text-sm text-white">
-                      {formatDate(selectedSubmission.submittedAt).date}
+                      {formatDate(selectedSubmission.updatedAt || selectedSubmission.submittedAt).date}
                     </p>
                     <p className="text-xs text-gray-400">
-                      {formatDate(selectedSubmission.submittedAt).time}
+                      {formatDate(selectedSubmission.updatedAt || selectedSubmission.submittedAt).time}
                     </p>
                   </div>
                   <div className="bg-gray-800 rounded-lg p-4">
