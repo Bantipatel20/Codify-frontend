@@ -43,9 +43,11 @@ const ViewProblems = ({ onEdit, onDataUpdate }) => {
     const fetchProblemDetails = async (problemId) => {
         try {
             setLoading(true);
-            const response = await problemsAPI.getProblemById(problemId);
+            const response = await problemsAPI.getProblemById(problemId, true);
             
-            if (response.success) {
+            console.log('Fetched problem details:', response);
+            
+            if (response.success && response.data) {
                 setSelectedProblem(response.data);
                 setViewMode('detail');
             } else {
@@ -111,27 +113,84 @@ const ViewProblems = ({ onEdit, onDataUpdate }) => {
     const handleEdit = async (problem) => {
         console.log('Edit button clicked for problem:', problem);
         
-        // If we only have basic problem data, fetch full details including test cases
-        if (!problem.testCases) {
-            try {
-                setLoading(true);
-                const response = await problemsAPI.getProblemById(problem._id);
-                
-                if (response.success) {
-                    setEditingProblem(response.data);
-                    setViewMode('edit');
-                } else {
-                    alert('Failed to load problem details for editing');
-                }
-            } catch (error) {
-                console.error('Error fetching problem for editing:', error);
-                alert('Error loading problem for editing');
-            } finally {
-                setLoading(false);
+        // Always fetch full problem details with all test cases (including hidden ones)
+        try {
+            setLoading(true);
+            const response = await problemsAPI.getProblemById(problem._id, true);
+            
+            console.log('Full API response for editing:', response);
+            console.log('Response type:', typeof response);
+            console.log('Response keys:', Object.keys(response || {}));
+            
+            // Handle different response formats
+            let problemData = null;
+            
+            if (response.success && response.data) {
+                problemData = response.data;
+            } else if (response.data && !response.success) {
+                problemData = response.data;
+            } else if (response._id) {
+                // Direct problem object without wrapper
+                problemData = response;
             }
-        } else {
-            setEditingProblem(problem);
-            setViewMode('edit');
+            
+            if (problemData) {
+                console.log('Problem data extracted:', problemData);
+                console.log('Test cases in problem data:', problemData.testCases);
+                console.log('Hidden test cases:', problemData.hiddenTestCases);
+                console.log('Public test cases:', problemData.publicTestCases);
+                
+                // Combine hidden and public test cases back into one array for editing
+                let allTestCases = [];
+                
+                if (problemData.testCases && problemData.testCases.length > 0) {
+                    // If testCases array exists and has data, use it
+                    allTestCases = problemData.testCases;
+                } else {
+                    // Otherwise, combine hiddenTestCases and publicTestCases
+                    const hidden = (problemData.hiddenTestCases || []).map(tc => ({
+                        ...tc,
+                        isHidden: true,
+                        isPublic: false
+                    }));
+                    
+                    const visible = (problemData.publicTestCases || []).map(tc => ({
+                        ...tc,
+                        isHidden: false,
+                        isPublic: true
+                    }));
+                    
+                    // Combine them (visible first, then hidden)
+                    allTestCases = [...visible, ...hidden];
+                }
+                
+                console.log('Combined test cases count:', allTestCases.length);
+                console.log('Combined test cases:', allTestCases);
+                
+                // Ensure test cases have all required fields
+                const processedProblem = {
+                    ...problemData,
+                    testCases: allTestCases.map(tc => ({
+                        input: tc.input || '',
+                        output: tc.output || '',
+                        description: tc.description || '',
+                        isHidden: tc.isHidden !== undefined ? tc.isHidden : false,
+                        isPublic: tc.isPublic !== undefined ? tc.isPublic : true
+                    }))
+                };
+                
+                console.log('Final processed problem with test cases:', processedProblem.testCases);
+                setEditingProblem(processedProblem);
+                setViewMode('edit');
+            } else {
+                console.error('No valid problem data found in response');
+                alert('Failed to load problem details for editing - no data in response');
+            }
+        } catch (error) {
+            console.error('Error fetching problem for editing:', error);
+            alert('Error loading problem for editing: ' + (error.message || 'Unknown error'));
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -215,6 +274,9 @@ const ViewProblems = ({ onEdit, onDataUpdate }) => {
 
     // Edit Problem Form Component - Simplified without add/remove test cases
     const EditProblemForm = ({ problem, onSave, onCancel }) => {
+        console.log('EditProblemForm received problem:', problem);
+        console.log('Problem test cases:', problem?.testCases);
+        
         const [formData, setFormData] = useState({
             title: problem?.title || '',
             description: problem?.description || '',
@@ -222,6 +284,8 @@ const ViewProblems = ({ onEdit, onDataUpdate }) => {
             tags: problem?.tags ? problem.tags.join(', ') : '',
             testCases: problem?.testCases || []
         });
+
+        console.log('Form initialized with test cases:', formData.testCases);
 
         const handleInputChange = (field, value) => {
             setFormData(prev => ({
@@ -363,14 +427,14 @@ const ViewProblems = ({ onEdit, onDataUpdate }) => {
                         </div>
                     </div>
 
-                    {/* Test Cases - Edit Only, No Add/Remove */}
+                    {/* Test Cases - Edit with Visibility Controls */}
                     <div className="bg-gray-800/30 border border-gray-600 rounded-xl p-6">
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="text-xl font-bold text-white">
                                 Test Cases ({formData.testCases.length})
                             </h3>
                             <div className="text-sm text-gray-400">
-                                Edit existing test cases only
+                                Edit test cases and control visibility
                             </div>
                         </div>
 
@@ -379,9 +443,52 @@ const ViewProblems = ({ onEdit, onDataUpdate }) => {
                                 <div key={index} className="bg-gray-700/30 border border-gray-600 rounded-lg p-4">
                                     <div className="flex items-center justify-between mb-3">
                                         <h4 className="text-lg font-semibold text-white">Test Case {index + 1}</h4>
-                                        <div className="text-xs text-gray-400">
-                                            Required fields
+                                        <div className="flex items-center space-x-4">
+                                            {/* Visibility Controls */}
+                                            <label className="flex items-center space-x-2 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={testCase.isHidden || false}
+                                                    onChange={(e) => handleTestCaseChange(index, 'isHidden', e.target.checked)}
+                                                    className="w-4 h-4 text-red-500 bg-gray-700 border-gray-600 rounded focus:ring-red-500"
+                                                />
+                                                <span className="text-sm text-gray-400">
+                                                    Hidden {testCase.isHidden ? '🔒' : '🔓'}
+                                                </span>
+                                            </label>
+                                            <label className="flex items-center space-x-2 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={testCase.isPublic || false}
+                                                    onChange={(e) => handleTestCaseChange(index, 'isPublic', e.target.checked)}
+                                                    className="w-4 h-4 text-green-500 bg-gray-700 border-gray-600 rounded focus:ring-green-500"
+                                                />
+                                                <span className="text-sm text-gray-400">
+                                                    Public {testCase.isPublic ? '👁️' : '🚫'}
+                                                </span>
+                                            </label>
                                         </div>
+                                    </div>
+
+                                    {/* Visibility Status Badge */}
+                                    <div className="mb-3">
+                                        {testCase.isHidden && !testCase.isPublic ? (
+                                            <span className="inline-block px-3 py-1 bg-red-500/20 text-red-400 border border-red-500/30 rounded-full text-xs font-medium">
+                                                🔒 Hidden from students (used for grading only)
+                                            </span>
+                                        ) : testCase.isPublic && !testCase.isHidden ? (
+                                            <span className="inline-block px-3 py-1 bg-green-500/20 text-green-400 border border-green-500/30 rounded-full text-xs font-medium">
+                                                👁️ Visible to students (sample test case)
+                                            </span>
+                                        ) : testCase.isPublic && testCase.isHidden ? (
+                                            <span className="inline-block px-3 py-1 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-full text-xs font-medium">
+                                                ⚠️ Conflicting settings (both public and hidden)
+                                            </span>
+                                        ) : (
+                                            <span className="inline-block px-3 py-1 bg-gray-500/20 text-gray-400 border border-gray-500/30 rounded-full text-xs font-medium">
+                                                ⚪ Private test case
+                                            </span>
+                                        )}
                                     </div>
                                     
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -411,6 +518,17 @@ const ViewProblems = ({ onEdit, onDataUpdate }) => {
                                                 required
                                             />
                                         </div>
+                                    </div>
+
+                                    {/* Explanation Text */}
+                                    <div className="mt-3 p-3 bg-gray-800/50 rounded-lg">
+                                        <p className="text-xs text-gray-400">
+                                            <strong className="text-gray-300">Visibility Guide:</strong><br/>
+                                            • <strong>Hidden + Not Public:</strong> Test case used for grading, students cannot see it<br/>
+                                            • <strong>Public + Not Hidden:</strong> Sample test case visible to students for testing<br/>
+                                            • <strong>Not Hidden + Not Public:</strong> Private test case (default behavior)<br/>
+                                            • Avoid setting both Hidden and Public at the same time
+                                        </p>
                                     </div>
                                 </div>
                             ))}
