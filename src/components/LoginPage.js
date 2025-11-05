@@ -20,6 +20,7 @@ const LoginPage = () => {
         try {
             console.log('🔄 Attempting login with authAPI...');
             
+            // Send credentials as-is, backend will handle case-insensitive matching
             const response = await authAPI.login({
                 username: username.trim(),
                 password: password
