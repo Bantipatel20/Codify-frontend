@@ -54,15 +54,12 @@ const Compiler = () => {
     // Updated test results state
     const [sampleTestResults, setSampleTestResults] = useState(null);
     const [allTestResults, setAllTestResults] = useState(null);
-    const [testResults, setTestResults] = useState(null); // For backward compatibility
-    const [testMode, setTestMode] = useState('sample');
     
     // UI State
     const [activeTab, setActiveTab] = useState('description');
     const [consoleCollapsed, setConsoleCollapsed] = useState(false);
     const [fontSize, setFontSize] = useState(14);
     const [problemData, setProblemData] = useState(null);
-    const [problemStats, setProblemStats] = useState(null);
     const [loading, setLoading] = useState(true);
 
     // Language templates
@@ -144,6 +141,118 @@ int main() {
         
         fetchSupportedLanguages();
         
+        // Initialize problem data based on context (contest vs practice)
+        const initializeProblemData = async () => {
+            try {
+                setLoading(true);
+                console.log('🔄 Initializing problem data...', { problem, isContestMode });
+
+                let resolvedProblemData = null;
+
+                if (isContestMode) {
+                    // For contest mode, use the problem data as-is from contest
+                    console.log('📝 Contest mode: Using contest problem data');
+                    resolvedProblemData = {
+                        _id: problem.problemId || problem._id,
+                        title: problem.title,
+                        description: problem.description || problem.manualProblem?.description || 'No description available for this contest problem.',
+                        difficulty: problem.difficulty || 'Medium',
+                        tags: problem.tags || [],
+                        // Separate normal and hidden test cases
+                        testCases: problem.testCases?.filter(tc => tc.type !== 'hidden') || [],
+                        hiddenTestCases: problem.testCases?.filter(tc => tc.type === 'hidden') || problem.hiddenTestCases || [],
+                        sampleInput: problem.manualProblem?.sampleInput || '',
+                        sampleOutput: problem.manualProblem?.sampleOutput || '',
+                        points: problem.points || 100,
+                        contestId: problem.contestId
+                    };
+
+                    // Create sample test cases from manual problem data if available
+                    if (problem.manualProblem?.sampleInput && problem.manualProblem?.sampleOutput) {
+                        resolvedProblemData.testCases = [
+                            {
+                                input: problem.manualProblem.sampleInput,
+                                output: problem.manualProblem.sampleOutput,
+                                type: 'sample'
+                            }
+                        ];
+                    }
+                } else {
+                    // For practice mode, fetch from database
+                    console.log('🎯 Practice mode: Fetching from database');
+                    const response = await problemsAPI.getProblemById(problem._id || problem.problemId, false);
+                    
+                    console.log('📊 Full problem response:', response);
+                    
+                    if (response.success && response.data) {
+                        const data = response.data;
+                        
+                        // Handle different test case structures from backend
+                        let normalTests = [];
+                        let hiddenTests = [];
+                        
+                        // Check for publicTestCases and hiddenTestCases arrays (split format)
+                        if (data.publicTestCases || data.hiddenTestCases) {
+                            console.log('📝 Using split test case format');
+                            normalTests = data.publicTestCases || [];
+                            hiddenTests = data.hiddenTestCases || [];
+                        } 
+                        // Check for unified testCases array with type markers
+                        else if (data.testCases && Array.isArray(data.testCases)) {
+                            console.log('📝 Using unified test case format');
+                            normalTests = data.testCases.filter(tc => !tc.isHidden || tc.isPublic) || [];
+                            hiddenTests = data.testCases.filter(tc => tc.isHidden) || [];
+                        }
+                        
+                        resolvedProblemData = {
+                            ...data,
+                            testCases: normalTests.map(tc => ({
+                                ...tc,
+                                type: 'sample'
+                            })),
+                            hiddenTestCases: hiddenTests.map(tc => ({
+                                ...tc,
+                                type: 'hidden'
+                            }))
+                        };
+                    } else {
+                        console.warn('Failed to fetch problem from database, using fallback data');
+                        resolvedProblemData = {
+                            ...problem,
+                            testCases: problem.testCases?.filter(tc => tc.type !== 'hidden') || problem.publicTestCases || [],
+                            hiddenTestCases: problem.testCases?.filter(tc => tc.type === 'hidden') || problem.hiddenTestCases || []
+                        };
+                    }
+                }
+
+                console.log('✅ Problem data resolved:', {
+                    ...resolvedProblemData,
+                    normalTestCases: resolvedProblemData.testCases?.length || 0,
+                    hiddenTestCases: resolvedProblemData.hiddenTestCases?.length || 0
+                });
+                setProblemData(resolvedProblemData);
+                
+                // Fetch statistics
+                await fetchProblemStats(resolvedProblemData._id);
+                
+                // Check for restore options
+                if (user) {
+                    await checkForRestoreOptions(user._id, resolvedProblemData);
+                }
+                
+            } catch (error) {
+                console.error('❌ Error initializing problem data:', error);
+                // Fallback to using passed problem data
+                setProblemData({
+                    ...problem,
+                    testCases: problem.testCases?.filter(tc => tc.type !== 'hidden') || [],
+                    hiddenTestCases: problem.testCases?.filter(tc => tc.type === 'hidden') || []
+                });
+            } finally {
+                setLoading(false);
+            }
+        };
+        
         if (problem) {
             initializeProblemData();
         }
@@ -153,126 +262,18 @@ int main() {
                 clearInterval(autoSaveIntervalRef.current);
             }
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [problem, navigate]);
-
-    // Initialize problem data based on context (contest vs practice)
-    const initializeProblemData = async () => {
-        try {
-            setLoading(true);
-            console.log('🔄 Initializing problem data...', { problem, isContestMode });
-
-            let resolvedProblemData = null;
-
-            if (isContestMode) {
-                // For contest mode, use the problem data as-is from contest
-                console.log('📝 Contest mode: Using contest problem data');
-                resolvedProblemData = {
-                    _id: problem.problemId || problem._id,
-                    title: problem.title,
-                    description: problem.description || problem.manualProblem?.description || 'No description available for this contest problem.',
-                    difficulty: problem.difficulty || 'Medium',
-                    tags: problem.tags || [],
-                    // Separate normal and hidden test cases
-                    testCases: problem.testCases?.filter(tc => tc.type !== 'hidden') || [],
-                    hiddenTestCases: problem.testCases?.filter(tc => tc.type === 'hidden') || problem.hiddenTestCases || [],
-                    sampleInput: problem.manualProblem?.sampleInput || '',
-                    sampleOutput: problem.manualProblem?.sampleOutput || '',
-                    points: problem.points || 100,
-                    contestId: problem.contestId
-                };
-
-                // Create sample test cases from manual problem data if available
-                if (problem.manualProblem?.sampleInput && problem.manualProblem?.sampleOutput) {
-                    resolvedProblemData.testCases = [
-                        {
-                            input: problem.manualProblem.sampleInput,
-                            output: problem.manualProblem.sampleOutput,
-                            type: 'sample'
-                        }
-                    ];
-                }
-            } else {
-                // For practice mode, fetch from database
-                console.log('🎯 Practice mode: Fetching from database');
-                const response = await problemsAPI.getProblemById(problem._id || problem.problemId);
-                
-                if (response.success) {
-                    resolvedProblemData = {
-                        ...response.data,
-                        // Separate test cases by type
-                        testCases: response.data.testCases?.filter(tc => tc.type !== 'hidden') || [],
-                        hiddenTestCases: response.data.testCases?.filter(tc => tc.type === 'hidden') || []
-                    };
-                } else {
-                    console.warn('Failed to fetch problem from database, using fallback data');
-                    resolvedProblemData = {
-                        ...problem,
-                        testCases: problem.testCases?.filter(tc => tc.type !== 'hidden') || [],
-                        hiddenTestCases: problem.testCases?.filter(tc => tc.type === 'hidden') || []
-                    };
-                }
-            }
-
-            console.log('✅ Problem data resolved:', {
-                ...resolvedProblemData,
-                normalTestCases: resolvedProblemData.testCases?.length || 0,
-                hiddenTestCases: resolvedProblemData.hiddenTestCases?.length || 0
-            });
-            setProblemData(resolvedProblemData);
-            
-            // Fetch statistics
-            await fetchProblemStats(resolvedProblemData._id);
-            
-            // Check for restore options
-            if (currentUser) {
-                await checkForRestoreOptions(currentUser._id, resolvedProblemData);
-            }
-            
-        } catch (error) {
-            console.error('❌ Error initializing problem data:', error);
-            // Fallback to using passed problem data
-            setProblemData({
-                ...problem,
-                testCases: problem.testCases?.filter(tc => tc.type !== 'hidden') || [],
-                hiddenTestCases: problem.testCases?.filter(tc => tc.type === 'hidden') || []
-            });
-        } finally {
-            setLoading(false);
-        }
-    };
 
     // Fetch problem statistics
     const fetchProblemStats = async (problemId) => {
         try {
-            const mockStats = {
-                acceptanceRate: Math.floor(Math.random() * 50) + 30,
-                totalSubmissions: Math.floor(Math.random() * 10000) + 1000,
-                totalAccepted: Math.floor(Math.random() * 5000) + 500
-            };
-            setProblemStats(mockStats);
+            // Mock stats - not currently displayed in UI
+            console.log('Fetched stats for problem:', problemId);
         } catch (error) {
             console.error('Failed to fetch problem stats:', error);
         }
     };
-
-    // Setup auto-save when code changes
-    useEffect(() => {
-        if (currentUser && problemData && code.trim()) {
-            if (autoSaveIntervalRef.current) {
-                clearInterval(autoSaveIntervalRef.current);
-            }
-            
-            autoSaveIntervalRef.current = setInterval(() => {
-                performAutoSave();
-            }, 60000);
-        }
-        
-        return () => {
-            if (autoSaveIntervalRef.current) {
-                clearInterval(autoSaveIntervalRef.current);
-            }
-        };
-    }, [code, language, currentUser, problemData]);
 
     // Fetch supported languages
     const fetchSupportedLanguages = async () => {
@@ -283,38 +284,6 @@ int main() {
             }
         } catch (error) {
             console.error('Failed to fetch supported languages:', error);
-        }
-    };
-
-    // Check for restore options
-    const checkForRestoreOptions = async (userId, problemData) => {
-        try {
-            console.log('🔍 Checking restore options for:', { userId, problemId: problemData._id, contestId: problemData.contestId });
-            
-            const response = await autoSaveAPI.getRestoreOptions(
-                userId, 
-                problemData._id,
-                problemData.contestId || null
-            );
-            
-            if (response.success && response.data) {
-                const options = response.data;
-                console.log('📋 Restore options found:', options);
-                
-                if (options.hasAutoSave || options.hasLatestSubmission) {
-                    setRestoreOptions(options);
-                    setShowRestoreModal(true);
-                } else {
-                    console.log('🆕 No previous work found, starting fresh');
-                    setCode(languageTemplates[language] || '');
-                }
-            } else {
-                console.log('🆕 No restore options available, starting fresh');
-                setCode(languageTemplates[language] || '');
-            }
-        } catch (error) {
-            console.error('❌ Failed to check restore options:', error);
-            setCode(languageTemplates[language] || '');
         }
     };
 
@@ -360,6 +329,57 @@ int main() {
             setTimeout(() => setAutoSaveStatus(''), 3000);
         }
     }, [currentUser, problemData, code, language, fontSize, isContestMode]);
+
+    // Setup auto-save when code changes
+    useEffect(() => {
+        if (currentUser && problemData && code.trim()) {
+            if (autoSaveIntervalRef.current) {
+                clearInterval(autoSaveIntervalRef.current);
+            }
+            
+            autoSaveIntervalRef.current = setInterval(() => {
+                performAutoSave();
+            }, 60000);
+        }
+        
+        return () => {
+            if (autoSaveIntervalRef.current) {
+                clearInterval(autoSaveIntervalRef.current);
+            }
+        };
+    }, [code, language, currentUser, problemData, performAutoSave]);
+
+    // Check for restore options
+    const checkForRestoreOptions = async (userId, problemData) => {
+        try {
+            console.log('🔍 Checking restore options for:', { userId, problemId: problemData._id, contestId: problemData.contestId });
+            
+            const response = await autoSaveAPI.getRestoreOptions(
+                userId, 
+                problemData._id,
+                problemData.contestId || null
+            );
+            
+            if (response.success && response.data) {
+                const options = response.data;
+                console.log('📋 Restore options found:', options);
+                
+                if (options.hasAutoSave || options.hasLatestSubmission) {
+                    setRestoreOptions(options);
+                    setShowRestoreModal(true);
+                } else {
+                    console.log('🆕 No previous work found, starting fresh');
+                    setCode(languageTemplates[language] || '');
+                }
+            } else {
+                console.log('🆕 No restore options available, starting fresh');
+                setCode(languageTemplates[language] || '');
+            }
+        } catch (error) {
+            console.error('❌ Failed to check restore options:', error);
+            setCode(languageTemplates[language] || '');
+        }
+    };
 
     // Handle restore option selection
     const handleRestore = async (option) => {
@@ -548,7 +568,6 @@ int main() {
 
             if (isSampleMode) {
                 setSampleTestResults(results);
-                setTestResults(results); // For backward compatibility
                 setActiveTab('testcase');
             } else {
                 setAllTestResults(results);
@@ -732,18 +751,6 @@ int main() {
                                         )}
                                     </>
                                 )}
-                                {/* Test case info */}
-                                {(problemData.testCases?.length > 0 || problemData.hiddenTestCases?.length > 0) && (
-                                    <>
-                                        <span className="text-gray-400">•</span>
-                                        <span className="text-green-500">{problemData.testCases?.length || 0} Sample</span>
-                                        {problemData.hiddenTestCases?.length > 0 && (
-                                            <>
-                                                <span className="text-purple-500">+ {problemData.hiddenTestCases.length} Hidden</span>
-                                            </>
-                                        )}
-                                    </>
-                                )}
                             </div>
                         </div>
                     </div>
@@ -826,29 +833,7 @@ int main() {
                                     </div>
                                 </div>
 
-                                {/* Test Case Information */}
-                                {(problemData.testCases?.length > 0 || problemData.hiddenTestCases?.length > 0) && (
-                                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                                        <div className="flex items-center space-x-2 mb-2">
-                                            <HiBeaker className="text-blue-600 dark:text-blue-400" />
-                                            <span className="font-medium text-blue-800 dark:text-blue-200">Test Cases</span>
-                                        </div>
-                                        <div className="text-sm text-blue-700 dark:text-blue-300">
-                                            <p>
-                                                <strong>Sample Tests:</strong> {problemData.testCases?.length || 0} (visible when testing)
-                                            </p>
-                                            {problemData.hiddenTestCases?.length > 0 && (
-                                                <p>
-                                                    <strong>Hidden Tests:</strong> {problemData.hiddenTestCases.length} (run only on submission)
-                                                </p>
-                                            )}
-                                            <p className="mt-2 text-xs">
-                                                💡 Use "Test Samples" to check your solution against visible test cases. 
-                                                "Submit Solution" will evaluate against all test cases including hidden ones.
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
+                                {/* Test Case Information removed per UX request */}
 
                                 {/* Problem Description */}
                                 <div className="prose dark:prose-invert max-w-none">
