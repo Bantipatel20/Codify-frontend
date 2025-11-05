@@ -283,19 +283,36 @@ const SubmissionTracking = ({ onBack }) => {
     return matchesProblem && matchesStatus && matchesUser && matchesDate;
   });
 
-  // Pagination
-  const totalPages = Math.ceil(filteredSubmissions.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedSubmissions = filteredSubmissions.slice(startIndex, startIndex + itemsPerPage);
+  // Get only the most recent submission for each problem
+  const latestSubmissionsMap = new Map();
+  filteredSubmissions.forEach(submission => {
+    if (!submission || !submission.problemId) return;
+    
+    const problemId = submission.problemId;
+    const existing = latestSubmissionsMap.get(problemId);
+    
+    if (!existing || new Date(submission.submittedAt) > new Date(existing.submittedAt)) {
+      latestSubmissionsMap.set(problemId, submission);
+    }
+  });
+  
+  // Convert map back to array and sort by submission date (most recent first)
+  const latestSubmissions = Array.from(latestSubmissionsMap.values())
+    .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
 
-  // Statistics with null safety
+  // Pagination - use latestSubmissions instead of filteredSubmissions
+  const totalPages = Math.ceil(latestSubmissions.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedSubmissions = latestSubmissions.slice(startIndex, startIndex + itemsPerPage);
+
+  // Statistics with null safety - calculate from latestSubmissions
   const stats = {
-    total: filteredSubmissions.length,
-    accepted: filteredSubmissions.filter(s => s && s.status === 'accepted').length,
-    failed: filteredSubmissions.filter(s => s && s.status && s.status !== 'accepted' && s.status !== 'pending' && s.status !== 'running').length,
-    pending: filteredSubmissions.filter(s => s && (s.status === 'pending' || s.status === 'running')).length,
-    avgScore: filteredSubmissions.length > 0 ? 
-      Math.round(filteredSubmissions.reduce((acc, s) => acc + (s?.score || 0), 0) / filteredSubmissions.length) : 0
+    total: latestSubmissions.length,
+    accepted: latestSubmissions.filter(s => s && s.status === 'accepted').length,
+    failed: latestSubmissions.filter(s => s && s.status && s.status !== 'accepted' && s.status !== 'pending' && s.status !== 'running').length,
+    pending: latestSubmissions.filter(s => s && (s.status === 'pending' || s.status === 'running')).length,
+    avgScore: latestSubmissions.length > 0 ? 
+      Math.round(latestSubmissions.reduce((acc, s) => acc + (s?.score || 0), 0) / latestSubmissions.length) : 0
   };
 
   if (loading) {
@@ -511,7 +528,7 @@ const SubmissionTracking = ({ onBack }) => {
               <div className="flex flex-wrap items-center justify-between mt-8 pt-6 border-t border-white/10">
                 <div className="flex items-center space-x-4">
                   <span className="text-sm text-gray-400">
-                    {filteredSubmissions.length} submissions found
+                    {latestSubmissions.length} problems with latest submissions
                   </span>
                   {(selectedProblem !== 'All' || statusFilter !== 'All' || selectedUser !== 'All' || dateRange !== 'All') && (
                     <button
@@ -569,10 +586,10 @@ const SubmissionTracking = ({ onBack }) => {
             <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl overflow-hidden">
               <div className="p-6 border-b border-white/20 flex items-center justify-between">
                 <h2 className="text-2xl font-bold text-white">
-                  Recent Submissions
+                  Latest Submission per Problem
                 </h2>
                 <span className="text-gray-400 text-sm">
-                  {filteredSubmissions.length} results
+                  {latestSubmissions.length} problems
                 </span>
               </div>
               
@@ -668,7 +685,7 @@ const SubmissionTracking = ({ onBack }) => {
               {totalPages > 1 && (
                 <div className="p-6 border-t border-white/20 flex items-center justify-between">
                   <div className="text-gray-400 text-sm">
-                    Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredSubmissions.length)} of {filteredSubmissions.length} results
+                    Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, latestSubmissions.length)} of {latestSubmissions.length} problems
                   </div>
                   <div className="flex space-x-2">
                     <button
