@@ -296,10 +296,30 @@ const ViewProblems = ({ onEdit, onDataUpdate }) => {
 
         const handleTestCaseChange = (index, field, value) => {
             const updatedTestCases = [...formData.testCases];
-            updatedTestCases[index] = {
-                ...updatedTestCases[index],
-                [field]: value
-            };
+            
+            // Handle visibility logic: if one is checked, uncheck the other
+            if (field === 'isHidden' && value === true) {
+                // When Hidden is checked, uncheck Public
+                updatedTestCases[index] = {
+                    ...updatedTestCases[index],
+                    isHidden: true,
+                    isPublic: false
+                };
+            } else if (field === 'isPublic' && value === true) {
+                // When Public is checked, uncheck Hidden
+                updatedTestCases[index] = {
+                    ...updatedTestCases[index],
+                    isPublic: true,
+                    isHidden: false
+                };
+            } else {
+                // For all other changes, just update the field normally
+                updatedTestCases[index] = {
+                    ...updatedTestCases[index],
+                    [field]: value
+                };
+            }
+            
             setFormData(prev => ({
                 ...prev,
                 testCases: updatedTestCases
@@ -520,16 +540,6 @@ const ViewProblems = ({ onEdit, onDataUpdate }) => {
                                         </div>
                                     </div>
 
-                                    {/* Explanation Text */}
-                                    <div className="mt-3 p-3 bg-gray-800/50 rounded-lg">
-                                        <p className="text-xs text-gray-400">
-                                            <strong className="text-gray-300">Visibility Guide:</strong><br/>
-                                            • <strong>Hidden + Not Public:</strong> Test case used for grading, students cannot see it<br/>
-                                            • <strong>Public + Not Hidden:</strong> Sample test case visible to students for testing<br/>
-                                            • <strong>Not Hidden + Not Public:</strong> Private test case (default behavior)<br/>
-                                            • Avoid setting both Hidden and Public at the same time
-                                        </p>
-                                    </div>
                                 </div>
                             ))}
                         </div>
