@@ -615,6 +615,24 @@ const Contest = ({ onBack }) => {
       }
 
       if (response.success) {
+        // Register manual students if manual selection is used
+        if (formData.participantSelection === 'manual' && formData.manualStudents.length > 0) {
+          try {
+            const contestId = showEditModal ? selectedContest._id : response.data._id;
+            const registerResponse = await contestAPI.registerManualStudents(contestId, formData.manualStudents);
+            
+            if (registerResponse.success) {
+              console.log(`✅ Registered ${formData.manualStudents.length} students to contest`);
+            } else {
+              console.error('Failed to register students:', registerResponse.error);
+              alert(`Contest created but failed to register students: ${registerResponse.error}`);
+            }
+          } catch (regError) {
+            console.error('Error registering students:', regError);
+            alert(`Contest created but error registering students: ${regError.message}`);
+          }
+        }
+        
         await fetchContests();
         setShowCreateModal(false);
         setShowEditModal(false);
