@@ -1,6 +1,6 @@
 // src/components/admin/ContestSubmissionAnalysis.js
 import React, { useState, useEffect } from 'react';
-import { HiArrowLeft, HiSearch, HiCode, HiCheckCircle, HiXCircle, HiClock, HiChartBar, HiDownload } from 'react-icons/hi';
+import { HiArrowLeft, HiSearch, HiCode, HiCheckCircle, HiClock, HiChartBar, HiDownload } from 'react-icons/hi';
 import { contestAPI, submissionsAPI, userAPI, problemsAPI } from '../../services/api';
 
 const ContestSubmissionAnalysis = ({ onBack }) => {
@@ -59,12 +59,10 @@ const ContestSubmissionAnalysis = ({ onBack }) => {
       console.log('Contest ID:', contestId);
       console.log('Contest ID type:', typeof contestId);
       
-      // Fetch ALL submissions (ignore backend filtering)
-      // We'll filter on the frontend to diagnose the issue
+      // Fetch ALL submissions with code included
       const response = await submissionsAPI.getAllSubmissions({ 
-        limit: 10000 
-        // Temporarily removed contestId parameter to fetch ALL submissions
-        // This helps diagnose if backend filtering is the issue
+        limit: 10000,
+        includeCode: true // Request code field from backend
       });
 
       console.log('API Response:', response);
@@ -84,6 +82,8 @@ const ContestSubmissionAnalysis = ({ onBack }) => {
           console.log('problemId value:', allSubmissions[0].problemId);
           console.log('contestId in submission:', allSubmissions[0].contestId);
           console.log('contestId type:', typeof allSubmissions[0].contestId);
+          console.log('HAS CODE?:', !!allSubmissions[0].code);
+          console.log('CODE LENGTH:', allSubmissions[0].code?.length || 0);
           
           if (allSubmissions.length > 1) {
             console.log('Second submission userId:', allSubmissions[1].userId);
@@ -287,16 +287,61 @@ const ContestSubmissionAnalysis = ({ onBack }) => {
           }
         });
         
-        const latest = Array.from(latestMap.values())
-          .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+        const latest = Array.from(latestMap.values());
         
-        console.log('Latest submissions count:', latest.length);
-        if (latest.length > 0) {
-          console.log('First latest submission:', latest[0]);
+        // Group by student and calculate total scores for leaderboard
+        const studentScores = new Map();
+        
+        latest.forEach(submission => {
+          const userIdKey = submission.userId._id || submission.userId;
+          const userId = String(userIdKey);
+          
+          if (!studentScores.has(userId)) {
+            studentScores.set(userId, {
+              userId: submission.userId,
+              totalScore: 0,
+              problemsSolved: 0,
+              submissions: [],
+              lastSubmission: submission.submittedAt
+            });
+          }
+          
+          const studentData = studentScores.get(userId);
+          studentData.submissions.push(submission);
+          
+          // Add score (0-100 per problem, accepted = 100)
+          const score = submission.score || 0;
+          studentData.totalScore += score;
+          
+          if (submission.status === 'accepted' || submission.status === 'Accepted') {
+            studentData.problemsSolved++;
+          }
+          
+          // Update last submission time
+          if (new Date(submission.submittedAt) > new Date(studentData.lastSubmission)) {
+            studentData.lastSubmission = submission.submittedAt;
+          }
+        });
+        
+        // Convert to array and sort by total score (descending), then by problems solved
+        const leaderboard = Array.from(studentScores.values())
+          .sort((a, b) => {
+            if (b.totalScore !== a.totalScore) {
+              return b.totalScore - a.totalScore; // Higher score first
+            }
+            if (b.problemsSolved !== a.problemsSolved) {
+              return b.problemsSolved - a.problemsSolved; // More problems solved first
+            }
+            return new Date(a.lastSubmission) - new Date(b.lastSubmission); // Earlier submission first (tiebreaker)
+          });
+        
+        console.log('Leaderboard count:', leaderboard.length);
+        if (leaderboard.length > 0) {
+          console.log('Top student:', leaderboard[0]);
         }
         
-        setLatestSubmissions(latest);
-        calculateStatistics(allSubmissions, latest);
+        setLatestSubmissions(leaderboard);
+        calculateStatistics(allSubmissions, leaderboard);
       } else {
         setError('Failed to fetch submissions');
         setLatestSubmissions([]);
@@ -310,38 +355,64 @@ const ContestSubmissionAnalysis = ({ onBack }) => {
     }
   };
 
-  const calculateStatistics = (allSubmissions, latest) => {
-    if (!selectedContest) return;
+  const calculateStatistics = (allSubmissions, leaderboard) => {
+    console.log('📊 Calculating statistics...');
+    console.log('All submissions count:', allSubmissions?.length || 0);
+    console.log('Leaderboard count:', leaderboard?.length || 0);
+    console.log('Selected contest:', selectedContest?.title);
+    
+    if (!selectedContest) {
+      console.warn('⚠️ No selected contest, skipping statistics calculation');
+      return;
+    }
 
-    const uniqueParticipants = new Set(
-      allSubmissions.map(s => s.userId?._id || s.userId).filter(Boolean)
-    ).size;
-
-    const uniqueProblems = new Set(
-      latest.map(s => s.problemId?._id || s.problemId).filter(Boolean)
-    ).size;
-
-    const acceptedSubmissions = latest.filter(
-      s => s.status === 'Accepted' || s.verdict === 'Accepted'
-    ).length;
-
-    const successRate = latest.length > 0 
-      ? ((acceptedSubmissions / latest.length) * 100).toFixed(2)
+    // leaderboard is an array of student data with {userId, totalScore, problemsSolved, submissions[]}
+    const totalParticipants = leaderboard.length;
+    const totalSubmissions = allSubmissions.length;
+    
+    // Calculate total problems solved across all students
+    const totalProblemsSolved = leaderboard.reduce((sum, student) => sum + (student.problemsSolved || 0), 0);
+    const totalProblemsAttempted = leaderboard.reduce((sum, student) => sum + (student.submissions?.length || 0), 0);
+    
+    console.log('Total problems solved:', totalProblemsSolved);
+    console.log('Total problems attempted:', totalProblemsAttempted);
+    
+    // Success rate = (total problems solved / total problems attempted) * 100
+    const successRate = totalProblemsAttempted > 0 
+      ? ((totalProblemsSolved / totalProblemsAttempted) * 100).toFixed(2)
       : 0;
 
+    // Average score across all students
+    const totalScore = leaderboard.reduce((sum, student) => sum + (student.totalScore || 0), 0);
+    const averageScore = totalParticipants > 0 
+      ? (totalScore / totalParticipants).toFixed(2)
+      : 0;
+
+    console.log('Total score:', totalScore);
+    console.log('Average score:', averageScore);
+
+    // Unique problems attempted
+    const uniqueProblems = new Set(
+      allSubmissions.map(s => s.problemId?._id || s.problemId).filter(Boolean)
+    ).size;
+
+    // Completion rate = (unique problems attempted / total contest problems) * 100
     const totalProblems = selectedContest.problems?.length || 0;
     const completionRate = totalProblems > 0
       ? ((uniqueProblems / totalProblems) * 100).toFixed(2)
       : 0;
 
-    setStatistics({
-      totalParticipants: uniqueParticipants,
-      totalSubmissions: allSubmissions.length,
+    const newStats = {
+      totalParticipants,
+      totalSubmissions,
       uniqueProblems,
       successRate: parseFloat(successRate),
-      averageScore: 0, // Can be calculated based on points
+      averageScore: parseFloat(averageScore),
       completionRate: parseFloat(completionRate)
-    });
+    };
+
+    console.log('✅ New statistics:', newStats);
+    setStatistics(newStats);
   };
 
   const handleContestSelect = (contest) => {
@@ -351,8 +422,9 @@ const ContestSubmissionAnalysis = ({ onBack }) => {
     setStatusFilter('All');
   };
 
-  const handleViewCode = (submission) => {
-    setSelectedSubmission(submission);
+  const handleViewCode = (studentData) => {
+    // studentData already contains all submissions for this student
+    setSelectedSubmission(studentData);
     setShowCodeModal(true);
   };
 
@@ -383,14 +455,6 @@ const ContestSubmissionAnalysis = ({ onBack }) => {
     }
   };
 
-  const getStatusIcon = (status) => {
-    const normalized = normalizeStatus(status);
-    if (normalized === 'Accepted') {
-      return <HiCheckCircle className="text-green-400" />;
-    }
-    return <HiXCircle className="text-red-400" />;
-  };
-
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     try {
@@ -407,67 +471,86 @@ const ContestSubmissionAnalysis = ({ onBack }) => {
   };
 
   const exportToCSV = () => {
-    if (latestSubmissions.length === 0) return;
+    console.log('=== CSV Export Started ===');
+    console.log('Exporting leaderboard data:', latestSubmissions);
+    console.log('Number of students:', latestSubmissions.length);
+    
+    if (latestSubmissions.length === 0) {
+      console.warn('No submissions to export');
+      return;
+    }
 
-    const headers = ['Student ID', 'Student Name', 'Problem', 'Status', 'Language', 'Submitted At'];
-    const rows = latestSubmissions.map(sub => {
-      const studentId = typeof sub.userId === 'object' 
-        ? (sub.userId?.student_id || sub.userId?.studentId || 'N/A')
+    // CSV headers for leaderboard data
+    const headers = ['Rank', 'Student ID', 'Student Name', 'Total Score', 'Problems Solved', 'Total Problems', 'Last Submission'];
+    console.log('CSV Headers:', headers);
+    
+    // Export leaderboard data (one row per student)
+    const rows = latestSubmissions.map((studentData, index) => {
+      const studentId = typeof studentData.userId === 'object' 
+        ? (studentData.userId?.student_id || studentData.userId?.studentId || 'N/A')
         : 'N/A';
-      const studentName = typeof sub.userId === 'object'
-        ? (sub.userId?.name || 'N/A')
-        : 'N/A';
-      const problemTitle = typeof sub.problemId === 'object'
-        ? (sub.problemId?.title || 'N/A')
+      const studentName = typeof studentData.userId === 'object'
+        ? (studentData.userId?.name || 'N/A')
         : 'N/A';
       
       return [
+        index + 1, // Rank
         studentId,
         studentName,
-        problemTitle,
-        normalizeStatus(sub.status || sub.verdict || 'N/A'),
-        sub.language || 'N/A',
-        formatDate(sub.submittedAt)
+        studentData.totalScore || 0,
+        studentData.problemsSolved || 0,
+        studentData.submissions?.length || 0,
+        formatDate(studentData.lastSubmission)
       ];
     });
+
+    console.log('CSV Rows (first 3):', rows.slice(0, 3));
+    console.log('Total rows:', rows.length);
 
     const csvContent = [
       headers.join(','),
       ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
     ].join('\n');
 
+    console.log('CSV Content Preview (first 500 chars):', csvContent.substring(0, 500));
+    const filename = `contest_${selectedContest?.title}_leaderboard.csv`;
+    console.log('Downloading file:', filename);
+
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `contest_${selectedContest?.title}_submissions.csv`;
+    a.download = filename;
     a.click();
     window.URL.revokeObjectURL(url);
+    
+    console.log('=== CSV Export Complete ===');
   };
 
-  const filteredSubmissions = latestSubmissions.filter(submission => {
-    // Case-insensitive search - prioritize student ID, then name, then problem
+  const filteredSubmissions = latestSubmissions.filter(studentData => {
+    // Case-insensitive search - search by student ID or name
     const searchLower = searchTerm.toLowerCase().trim();
     
-    // Handle both populated and non-populated userId/problemId
-    const studentId = typeof submission.userId === 'object' 
-      ? (submission.userId?.student_id || submission.userId?.studentId || '')
+    // Get student information
+    const studentId = typeof studentData.userId === 'object' 
+      ? (studentData.userId?.student_id || studentData.userId?.studentId || '')
       : '';
-    const studentName = typeof submission.userId === 'object'
-      ? (submission.userId?.name || '')
-      : '';
-    const problemTitle = typeof submission.problemId === 'object'
-      ? (submission.problemId?.title || '')
+    const studentName = typeof studentData.userId === 'object'
+      ? (studentData.userId?.name || '')
       : '';
     
     const matchesSearch = searchTerm === '' || 
       studentId.toLowerCase().includes(searchLower) ||
-      studentName.toLowerCase().includes(searchLower) ||
-      problemTitle.toLowerCase().includes(searchLower);
+      studentName.toLowerCase().includes(searchLower);
 
-    // Status filter - normalize both the submission status and filter value for comparison
-    const submissionStatus = normalizeStatus(submission.status || submission.verdict || '');
-    const matchesStatus = statusFilter === 'All' || submissionStatus === statusFilter;
+    // Status filter - check if ANY submission matches the status
+    let matchesStatus = statusFilter === 'All';
+    if (!matchesStatus && studentData.submissions) {
+      matchesStatus = studentData.submissions.some(sub => {
+        const submissionStatus = normalizeStatus(sub.status || sub.verdict || '');
+        return submissionStatus === statusFilter;
+      });
+    }
 
     return matchesSearch && matchesStatus;
   });
@@ -569,32 +652,28 @@ const ContestSubmissionAnalysis = ({ onBack }) => {
                 </button>
               </div>
 
-              {/* Statistics */}
+              {/* Leaderboard Statistics */}
               {!analysisLoading && (
-                <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mt-6">
-                  <div className="bg-gray-700 rounded-lg p-4 text-center">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6">
+                  <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/20 border border-blue-500/30 rounded-lg p-4 text-center">
                     <div className="text-2xl font-bold text-blue-400">{statistics.totalParticipants}</div>
-                    <div className="text-xs text-gray-400 mt-1">Participants</div>
+                    <div className="text-xs text-gray-300 mt-1">Total Participants</div>
                   </div>
-                  <div className="bg-gray-700 rounded-lg p-4 text-center">
+                  <div className="bg-gradient-to-br from-green-500/20 to-green-600/20 border border-green-500/30 rounded-lg p-4 text-center">
                     <div className="text-2xl font-bold text-green-400">{statistics.totalSubmissions}</div>
-                    <div className="text-xs text-gray-400 mt-1">Total Submissions</div>
+                    <div className="text-xs text-gray-300 mt-1">Total Submissions</div>
                   </div>
-                  <div className="bg-gray-700 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-purple-400">{latestSubmissions.length}</div>
-                    <div className="text-xs text-gray-400 mt-1">Latest Submissions</div>
-                  </div>
-                  <div className="bg-gray-700 rounded-lg p-4 text-center">
+                  <div className="bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 border border-yellow-500/30 rounded-lg p-4 text-center">
                     <div className="text-2xl font-bold text-yellow-400">{statistics.uniqueProblems}</div>
-                    <div className="text-xs text-gray-400 mt-1">Problems Attempted</div>
+                    <div className="text-xs text-gray-300 mt-1">Problems Attempted</div>
                   </div>
-                  <div className="bg-gray-700 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-orange-400">{statistics.successRate}%</div>
-                    <div className="text-xs text-gray-400 mt-1">Success Rate</div>
+                  <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-500/30 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-purple-400">{statistics.averageScore.toFixed(0)}</div>
+                    <div className="text-xs text-gray-300 mt-1">Avg Score</div>
                   </div>
-                  <div className="bg-gray-700 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-pink-400">{statistics.completionRate}%</div>
-                    <div className="text-xs text-gray-400 mt-1">Completion Rate</div>
+                  <div className="bg-gradient-to-br from-pink-500/20 to-pink-600/20 border border-pink-500/30 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-pink-400">{statistics.successRate}%</div>
+                    <div className="text-xs text-gray-300 mt-1">Success Rate</div>
                   </div>
                 </div>
               )}
@@ -643,7 +722,7 @@ const ContestSubmissionAnalysis = ({ onBack }) => {
 
                   <div className="flex items-center justify-between mt-4">
                     <div className="text-sm text-gray-400">
-                      Showing {filteredSubmissions.length} of {latestSubmissions.length} latest submissions
+                      Showing {filteredSubmissions.length} of {latestSubmissions.length} students
                     </div>
                     <button
                       onClick={exportToCSV}
@@ -656,74 +735,94 @@ const ContestSubmissionAnalysis = ({ onBack }) => {
                   </div>
                 </div>
 
-                {/* Submissions Table */}
+                {/* Leaderboard Table */}
                 <div className="bg-gray-800 rounded-2xl overflow-hidden">
                   <div className="p-6 border-b border-gray-700">
-                    <h2 className="text-xl font-bold text-white">Latest Submissions per Student</h2>
-                    <p className="text-gray-400 text-sm mt-1">Showing the most recent submission for each student-problem combination</p>
+                    <h2 className="text-xl font-bold text-white">Contest Leaderboard</h2>
+                    <p className="text-gray-400 text-sm mt-1">Students ranked by total score and problems solved</p>
                   </div>
                   
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead className="bg-gray-700">
                         <tr>
+                          <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Rank</th>
                           <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Student (ID / Name)</th>
-                          <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Problem</th>
-                          <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Status</th>
-                          <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Language</th>
-                          <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Submitted</th>
+                          <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Total Score</th>
+                          <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Problems Solved</th>
+                          <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Last Submission</th>
                           <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-700">
-                        {filteredSubmissions.map((submission) => {
-                          // Handle both populated and non-populated userId/problemId
-                          const studentId = typeof submission.userId === 'object' 
-                            ? (submission.userId?.student_id || submission.userId?.studentId || 'N/A')
+                        {filteredSubmissions.map((studentData, index) => {
+                          // Extract student information
+                          const studentId = typeof studentData.userId === 'object' 
+                            ? (studentData.userId?.student_id || studentData.userId?.studentId || 'N/A')
                             : 'N/A';
-                          const studentName = typeof submission.userId === 'object'
-                            ? (submission.userId?.name || 'N/A')
-                            : 'N/A';
-                          const problemTitle = typeof submission.problemId === 'object'
-                            ? (submission.problemId?.title || 'N/A')
+                          const studentName = typeof studentData.userId === 'object'
+                            ? (studentData.userId?.name || 'N/A')
                             : 'N/A';
                           
+                          // Rank styling
+                          const rankClass = index === 0 
+                            ? 'text-yellow-400 font-bold text-lg' 
+                            : index === 1 
+                            ? 'text-gray-300 font-bold text-lg' 
+                            : index === 2 
+                            ? 'text-orange-400 font-bold text-lg' 
+                            : 'text-gray-400';
+                          
+                          const rankIcon = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '';
+                          
                           return (
-                          <tr key={submission._id} className="hover:bg-gray-700/50 transition-colors">
+                          <tr key={studentData.userId._id || index} className="hover:bg-gray-700/50 transition-colors">
                             <td className="px-6 py-4">
-                              <div>
-                                <div className="font-medium text-white">{studentId}</div>
-                                <div className="text-sm text-gray-400">{studentName}</div>
+                              <div className={`flex items-center space-x-2 ${rankClass}`}>
+                                {rankIcon && <span>{rankIcon}</span>}
+                                <span className="font-bold">{index + 1}</span>
                               </div>
                             </td>
                             <td className="px-6 py-4">
-                              <div className="font-medium text-white">{problemTitle}</div>
+                              <div className="flex items-center space-x-3">
+                                <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                                  <span className="text-white text-sm font-bold">
+                                    {studentId.slice(-2)}
+                                  </span>
+                                </div>
+                                <div>
+                                  <div className="font-medium text-white">{studentId}</div>
+                                  <div className="text-sm text-gray-400">{studentName}</div>
+                                </div>
+                              </div>
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex items-center space-x-2">
-                                {getStatusIcon(submission.status || submission.verdict)}
-                                <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(submission.status || submission.verdict)}`}>
-                                  {normalizeStatus(submission.status || submission.verdict) || 'N/A'}
-                                </span>
+                                <span className="text-2xl font-bold text-white">{studentData.totalScore}</span>
+                                <span className="text-gray-400 text-sm">pts</span>
                               </div>
                             </td>
                             <td className="px-6 py-4">
-                              <span className="text-gray-300">{submission.language || 'N/A'}</span>
+                              <div className="flex items-center space-x-2">
+                                <HiCheckCircle className="text-green-400" />
+                                <span className="text-white font-medium">{studentData.problemsSolved}</span>
+                                <span className="text-gray-400 text-sm">/ {studentData.submissions.length}</span>
+                              </div>
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex items-center text-gray-300 text-sm">
                                 <HiClock className="mr-2 text-gray-400" />
-                                {formatDate(submission.submittedAt)}
+                                {formatDate(studentData.lastSubmission)}
                               </div>
                             </td>
                             <td className="px-6 py-4">
                               <button
-                                onClick={() => handleViewCode(submission)}
-                                className="flex items-center space-x-1 p-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors"
-                                title="View Code"
+                                onClick={() => handleViewCode(studentData)}
+                                className="flex items-center space-x-1 px-3 py-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors border border-blue-500/30"
+                                title="View all problem submissions for this student"
                               >
                                 <HiCode className="text-sm" />
-                                <span className="text-xs">View</span>
+                                <span className="text-xs font-medium">View All Code</span>
                               </button>
                             </td>
                           </tr>
@@ -765,47 +864,102 @@ const ContestSubmissionAnalysis = ({ onBack }) => {
           </>
         )}
 
-        {/* Code View Modal */}
+        {/* Code View Modal - Shows All Problem Submissions for Student */}
         {showCodeModal && selectedSubmission && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="flex items-center justify-between p-6 border-b border-gray-700">
+            <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between p-6 border-b border-gray-700 sticky top-0 bg-gray-900 z-10">
                 <div>
-                  <h3 className="text-xl font-bold text-white">Submission Code</h3>
+                  <h3 className="text-xl font-bold text-white">All Problem Submissions</h3>
                   <p className="text-gray-400 text-sm mt-1">
                     {typeof selectedSubmission.userId === 'object' 
-                      ? `${selectedSubmission.userId?.student_id || selectedSubmission.userId?.studentId || 'N/A'} (${selectedSubmission.userId?.name || 'N/A'})` 
-                      : 'N/A'} - {typeof selectedSubmission.problemId === 'object' 
-                      ? (selectedSubmission.problemId?.title || 'N/A')
-                      : 'N/A'}
+                      ? `${selectedSubmission.userId?.student_id || selectedSubmission.userId?.studentId || 'N/A'} - ${selectedSubmission.userId?.name || 'N/A'}`
+                      : 'N/A'} - {selectedSubmission.submissions?.filter(s => s.code && s.code.trim() !== '').length || 0} code submission(s)
+                  </p>
+                  <p className="text-blue-400 text-sm mt-1">
+                    Total Score: <span className="font-bold">{selectedSubmission.totalScore}</span> | Solved: <span className="font-bold">{selectedSubmission.problemsSolved}</span>/{selectedSubmission.submissions?.length || 0}
                   </p>
                 </div>
                 <button 
                   onClick={() => setShowCodeModal(false)} 
-                  className="text-gray-400 hover:text-white text-2xl"
+                  className="text-gray-400 hover:text-white text-2xl font-bold"
                 >
                   ×
                 </button>
               </div>
-              <div className="p-6">
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div className="bg-gray-800 rounded-lg p-3">
-                    <div className="text-xs text-gray-400 mb-1">Status</div>
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(selectedSubmission.status || selectedSubmission.verdict)}`}>
-                      {normalizeStatus(selectedSubmission.status || selectedSubmission.verdict)}
-                    </span>
-                  </div>
-                  <div className="bg-gray-800 rounded-lg p-3">
-                    <div className="text-xs text-gray-400 mb-1">Language</div>
-                    <div className="text-white font-medium">{selectedSubmission.language}</div>
-                  </div>
-                </div>
-                <div className="bg-gray-800 rounded-lg p-4">
-                  <div className="text-xs text-gray-400 mb-2">Code:</div>
-                  <pre className="text-sm text-gray-300 overflow-x-auto bg-gray-900 p-4 rounded">
-                    <code>{selectedSubmission.code || 'No code available'}</code>
-                  </pre>
-                </div>
+              <div className="p-6 space-y-6">
+                {(() => {
+                  // Filter out submissions without code
+                  const submissionsWithCode = selectedSubmission.submissions?.filter(sub => sub.code && sub.code.trim() !== '') || [];
+                  
+                  if (submissionsWithCode.length === 0) {
+                    return (
+                      <div className="text-center py-8 text-gray-400">
+                        <HiCode className="mx-auto text-4xl text-gray-500 mb-4" />
+                        <p>No code submissions available for this student</p>
+                      </div>
+                    );
+                  }
+                  
+                  return submissionsWithCode
+                    .sort((a, b) => {
+                      // Sort by problem title
+                      const titleA = typeof a.problemId === 'object' ? (a.problemId?.title || '') : '';
+                      const titleB = typeof b.problemId === 'object' ? (b.problemId?.title || '') : '';
+                      return titleA.localeCompare(titleB);
+                    })
+                    .map((sub, index) => {
+                      const problemTitle = typeof sub.problemId === 'object'
+                        ? (sub.problemId?.title || 'N/A')
+                        : 'N/A';
+                      const score = sub.score || 0;
+                      
+                      return (
+                        <div key={sub._id || index} className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
+                          {/* Problem Header */}
+                          <div className="bg-gray-700 px-4 py-3 border-b border-gray-600">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
+                                  <span className="text-white text-sm font-bold">
+                                    #{index + 1}
+                                  </span>
+                                </div>
+                                <div>
+                                  <div className="text-white font-semibold">{problemTitle}</div>
+                                  <div className="text-gray-400 text-sm">{sub.language || 'N/A'}</div>
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-4">
+                                <div className="text-right">
+                                  <div className="text-xs text-gray-400">Score</div>
+                                  <div className={`text-lg font-bold ${score >= 90 ? 'text-green-400' : score >= 70 ? 'text-yellow-400' : score >= 50 ? 'text-orange-400' : 'text-red-400'}`}>
+                                    {score}%
+                                  </div>
+                                </div>
+                                <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(sub.status || sub.verdict)}`}>
+                                  {normalizeStatus(sub.status || sub.verdict)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Code Display */}
+                          <div className="p-4">
+                            <div className="text-xs text-gray-400 mb-2 flex items-center justify-between">
+                              <span>Code:</span>
+                              <span className="text-gray-500">
+                                Submitted: {new Date(sub.submittedAt).toLocaleString()}
+                              </span>
+                            </div>
+                            <pre className="text-sm text-gray-300 overflow-x-auto bg-gray-900 p-4 rounded border border-gray-700">
+                              <code>{sub.code}</code>
+                            </pre>
+                          </div>
+                        </div>
+                      );
+                    });
+                })()}
               </div>
             </div>
           </div>
