@@ -100,6 +100,14 @@ const Contests = () => {
     return true;
   }, []);
 
+  // Check if user is registered for contest
+  const checkRegistration = useCallback((contest, user) => {
+    if (!user || !contest.participants) return false;
+    return contest.participants.some(p => 
+      (typeof p === 'object' ? p.userId : p) === user._id
+    );
+  }, []);
+
   // Check if contest should be shown to user
   const checkContestVisibility = useCallback((contest, user) => {
     if (!user) {
@@ -107,7 +115,7 @@ const Contests = () => {
       return false;
     }
 
-    // Only show automatic selection contests
+    // Check for automatic selection contests
     if (contest.participantSelection === 'automatic') {
       // If no criteria specified, show to everyone
       const hasAnyCriteria = contest.filterCriteria && (
@@ -133,18 +141,22 @@ const Contests = () => {
       }
     }
     
-    // Hide manual contests completely
-    console.log('❌ Hiding manual contest:', contest.title);
+    // Check for manual selection contests - show if user is registered
+    if (contest.participantSelection === 'manual') {
+      const isRegistered = checkRegistration(contest, user);
+      if (isRegistered) {
+        console.log('✅ User is registered for manual contest:', contest.title);
+        return true;
+      } else {
+        console.log('❌ User not registered for manual contest, hiding:', contest.title);
+        return false;
+      }
+    }
+    
+    // Unknown selection type, hide by default
+    console.log('❌ Unknown participant selection type, hiding contest:', contest.title);
     return false;
-  }, [checkCriteriaMatch]);
-
-  // Check if user is registered for contest
-  const checkRegistration = useCallback((contest, user) => {
-    if (!user || !contest.participants) return false;
-    return contest.participants.some(p => 
-      (typeof p === 'object' ? p.userId : p) === user._id
-    );
-  }, []);
+  }, [checkCriteriaMatch, checkRegistration]);
 
   // Auto-register user for automatic contests they're eligible for
   const autoRegisterForContest = useCallback(async (contest, user) => {
