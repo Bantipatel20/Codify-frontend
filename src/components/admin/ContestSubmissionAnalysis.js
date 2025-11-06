@@ -57,11 +57,14 @@ const ContestSubmissionAnalysis = ({ onBack }) => {
       
       console.log('=== FETCHING CONTEST SUBMISSIONS ===');
       console.log('Contest ID:', contestId);
+      console.log('Contest ID type:', typeof contestId);
       
-      // Fetch all submissions for the contest
+      // Fetch ALL submissions (ignore backend filtering)
+      // We'll filter on the frontend to diagnose the issue
       const response = await submissionsAPI.getAllSubmissions({ 
-        contestId,
         limit: 10000 
+        // Temporarily removed contestId parameter to fetch ALL submissions
+        // This helps diagnose if backend filtering is the issue
       });
 
       console.log('API Response:', response);
@@ -79,16 +82,64 @@ const ContestSubmissionAnalysis = ({ onBack }) => {
           console.log('userId value:', allSubmissions[0].userId);
           console.log('problemId type:', typeof allSubmissions[0].problemId);
           console.log('problemId value:', allSubmissions[0].problemId);
+          console.log('contestId in submission:', allSubmissions[0].contestId);
+          console.log('contestId type:', typeof allSubmissions[0].contestId);
           
           if (allSubmissions.length > 1) {
             console.log('Second submission userId:', allSubmissions[1].userId);
+            console.log('Second submission contestId:', allSubmissions[1].contestId);
           }
-        } else {
-          console.log('No submissions found for this contest');
+          
+          // Log all unique contestIds to see what's in the data
+          const uniqueContestIds = [...new Set(allSubmissions.map(s => {
+            if (!s.contestId) return 'NULL';
+            if (typeof s.contestId === 'string') return s.contestId;
+            if (s.contestId._id) return s.contestId._id;
+            return 'UNKNOWN';
+          }))];
+          console.log('Unique contestIds in submissions:', uniqueContestIds);
+          console.log('Looking for contestId:', contestId);
+          
+          // Filter submissions to only include those from this contest
+          // Exclude submissions with null/undefined contestId (practice submissions)
+          const contestSubmissions = allSubmissions.filter(sub => {
+            // First check if contestId exists and is not null
+            if (!sub.contestId) {
+              console.log(`⏭️ Skipping submission ${sub._id} - contestId is null (practice submission)`);
+              return false; // Skip practice submissions (contestId is null)
+            }
+            
+            const subContestId = sub.contestId?._id || sub.contestId;
+            const matches = String(subContestId) === String(contestId);
+            
+            if (!matches) {
+              console.log(`⏭️ Skipping submission ${sub._id} with contestId ${subContestId} (looking for ${contestId})`);
+            } else {
+              console.log(`✅ Including submission ${sub._id} with matching contestId ${subContestId}`);
+            }
+            
+            return matches;
+          });
+          
+          console.log(`🎯 Filtered ${contestSubmissions.length} contest submissions for contest ${contestId} from ${allSubmissions.length} total submissions`);
+          console.log(`❌ Excluded ${allSubmissions.length - contestSubmissions.length} submissions (practice or other contests)`);
+          
+          allSubmissions = contestSubmissions;
+        }
+        
+        if (allSubmissions.length === 0) {
+          console.log('❌ NO SUBMISSIONS FOUND for this contest after filtering');
+          console.log('This could mean:');
+          console.log('1. No students have submitted solutions for this contest yet');
+          console.log('2. Backend is not returning contest submissions');
+          console.log('3. contestId field is not set in submissions');
           setLatestSubmissions([]);
+          calculateStatistics([], []);
           setAnalysisLoading(false);
           return;
         }
+        
+        console.log(`✅ Found ${allSubmissions.length} submissions for this contest`);
         
         // ALWAYS fetch and populate data since backend might not be populating correctly
         console.log('=== FETCHING USER AND PROBLEM DATA ===');
@@ -685,12 +736,27 @@ const ContestSubmissionAnalysis = ({ onBack }) => {
                   {filteredSubmissions.length === 0 && (
                     <div className="text-center py-12">
                       <HiCode className="mx-auto text-4xl text-gray-400 mb-4" />
-                      <h3 className="text-xl font-semibold text-white mb-2">No Submissions Found</h3>
-                      <p className="text-gray-400">
-                        {latestSubmissions.length === 0 
-                          ? 'No submissions have been made for this contest yet.' 
-                          : 'No submissions match your current filters.'}
-                      </p>
+                      <h3 className="text-xl font-semibold text-white mb-2">No Contest Submissions Found</h3>
+                      {latestSubmissions.length === 0 ? (
+                        <div>
+                          <p className="text-gray-400 mb-4">
+                            No submissions have been made for this contest yet.
+                          </p>
+                          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 max-w-2xl mx-auto text-left">
+                            <p className="text-yellow-400 text-sm font-semibold mb-2">💡 Troubleshooting Tips:</p>
+                            <ul className="text-gray-400 text-sm space-y-1 list-disc list-inside">
+                              <li>Make sure students have submitted code during the contest</li>
+                              <li>Check that submissions have the contestId field set</li>
+                              <li>Open browser console (F12) to see detailed logs</li>
+                              <li>Verify the contest is Active or Completed</li>
+                            </ul>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-gray-400">
+                          No submissions match your current filters. Try changing the status filter or search term.
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
