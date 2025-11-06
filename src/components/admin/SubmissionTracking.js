@@ -47,8 +47,17 @@ const SubmissionTracking = ({ onBack }) => {
       console.log('📊 Submissions response:', response);
       
       if (response.success) {
-        setSubmissions(response.data || []);
-        console.log(`✅ Loaded ${response.data?.length || 0} submissions`);
+        const allSubs = response.data || [];
+        setSubmissions(allSubs);
+        
+        // Count practice vs contest submissions
+        const practiceCount = allSubs.filter(s => !s.contestId).length;
+        const contestCount = allSubs.filter(s => s.contestId).length;
+        
+        console.log(`✅ Loaded ${allSubs.length} total submissions`);
+        console.log(`📝 Practice submissions (contestId: null): ${practiceCount}`);
+        console.log(`🏆 Contest submissions (contestId: set): ${contestCount}`);
+        console.log('📊 Submission Tracking will show ONLY practice submissions');
       } else {
         throw new Error(response.error || 'Failed to fetch submissions');
       }
@@ -249,8 +258,16 @@ const SubmissionTracking = ({ onBack }) => {
   };
 
   // Filter submissions with null safety
+  // ONLY show practice submissions (contestId is null or undefined)
   const filteredSubmissions = submissions.filter(submission => {
     if (!submission) return false;
+    
+    // First filter: ONLY include submissions where contestId is null/undefined (practice submissions)
+    // Exclude all contest submissions
+    if (submission.contestId !== null && submission.contestId !== undefined) {
+      console.log(`🚫 Excluding contest submission ${submission._id} (contestId: ${submission.contestId})`);
+      return false; // Skip contest submissions
+    }
     
     const matchesProblem = selectedProblem === 'All' || submission.problemId === selectedProblem;
     const matchesStatus = statusFilter === 'All' || submission.status === statusFilter;
@@ -345,8 +362,11 @@ const SubmissionTracking = ({ onBack }) => {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-orange-500 to-red-600 rounded-2xl mb-4">
             <HiChartBar className="text-2xl text-white" />
           </div>
-          <h1 className="text-4xl font-bold text-white mb-4">Submission Analytics</h1>
-          <p className="text-gray-300 text-lg">Monitor and analyze student code submissions</p>
+          <h1 className="text-4xl font-bold text-white mb-4">Practice Submission Analytics</h1>
+          <p className="text-gray-300 text-lg">Monitor and analyze student practice problem submissions</p>
+          <p className="text-gray-400 text-sm mt-2">
+            📝 Showing only practice submissions (Contest submissions are in Contest Analysis)
+          </p>
         </div>
 
         {/* Error Message */}
