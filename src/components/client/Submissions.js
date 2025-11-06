@@ -486,18 +486,6 @@ const Submissions = () => {
               </div>
             </div>
 
-            {/* Auto-refresh indicator */}
-            {submissions.some(s => s.status === 'pending' || s.status === 'running') && (
-              <div className="bg-blue-500/20 border border-blue-500/30 rounded-lg p-3 mb-6">
-                <div className="flex items-center space-x-2">
-                  <HiClock className="text-blue-400 animate-pulse" />
-                  <span className="text-blue-400 text-sm">
-                    Auto-refreshing submissions with pending results...
-                  </span>
-                </div>
-              </div>
-            )}
-
             {/* Filters */}
             <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6 mb-8">
               <div className="flex items-center space-x-3 mb-4">
