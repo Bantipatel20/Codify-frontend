@@ -1,6 +1,6 @@
 // src/components/admin/ContestSubmissionAnalysis.js
 import React, { useState, useEffect } from 'react';
-import { HiArrowLeft, HiSearch, HiCode, HiCheckCircle, HiClock, HiChartBar, HiDownload } from 'react-icons/hi';
+import { HiArrowLeft, HiSearch, HiCode, HiCheckCircle, HiClock, HiChartBar } from 'react-icons/hi';
 import { contestAPI, submissionsAPI, userAPI, problemsAPI } from '../../services/api';
 
 const ContestSubmissionAnalysis = ({ onBack }) => {
@@ -29,6 +29,11 @@ const ContestSubmissionAnalysis = ({ onBack }) => {
     fetchContests();
   }, []);
 
+  // Monitor statistics state changes
+  useEffect(() => {
+    console.log('🔄 Statistics state CHANGED:', statistics);
+  }, [statistics]);
+
   const fetchContests = async () => {
     try {
       setLoading(true);
@@ -50,7 +55,7 @@ const ContestSubmissionAnalysis = ({ onBack }) => {
     }
   };
 
-  const fetchContestSubmissions = async (contestId) => {
+  const fetchContestSubmissions = async (contestId, contestObj = null) => {
     try {
       setAnalysisLoading(true);
       setError('');
@@ -134,7 +139,7 @@ const ContestSubmissionAnalysis = ({ onBack }) => {
           console.log('2. Backend is not returning contest submissions');
           console.log('3. contestId field is not set in submissions');
           setLatestSubmissions([]);
-          calculateStatistics([], []);
+          calculateStatistics([], [], contestObj);
           setAnalysisLoading(false);
           return;
         }
@@ -340,8 +345,10 @@ const ContestSubmissionAnalysis = ({ onBack }) => {
           console.log('Top student:', leaderboard[0]);
         }
         
-        setLatestSubmissions(leaderboard);
-        calculateStatistics(allSubmissions, leaderboard);
+  setLatestSubmissions(leaderboard);
+  // Pass contestObj (if provided) to ensure statistics calculation does not
+  // depend on React state update timing for `selectedContest`.
+  calculateStatistics(allSubmissions, leaderboard, contestObj);
       } else {
         setError('Failed to fetch submissions');
         setLatestSubmissions([]);
@@ -355,37 +362,48 @@ const ContestSubmissionAnalysis = ({ onBack }) => {
     }
   };
 
-  const calculateStatistics = (allSubmissions, leaderboard) => {
-    console.log('📊 Calculating statistics...');
-    console.log('All submissions count:', allSubmissions?.length || 0);
-    console.log('Leaderboard count:', leaderboard?.length || 0);
-    console.log('Selected contest:', selectedContest?.title);
+  const calculateStatistics = (allSubmissions, leaderboard, contest = null) => {
+    console.log('📊 ===== CALCULATING STATISTICS =====');
+    console.log('Input - allSubmissions:', allSubmissions?.length || 0);
+    console.log('Input - leaderboard:', leaderboard?.length || 0);
+    console.log('Input - contest param:', contest?.title || 'null');
+    console.log('State - selectedContest:', selectedContest?.title || 'null');
+
+    // Use provided contest object (preferred) or fall back to selectedContest state
+    const contestContext = contest || selectedContest;
+    console.log('Using contestContext:', contestContext?.title || 'NONE');
     
-    if (!selectedContest) {
-      console.warn('⚠️ No selected contest, skipping statistics calculation');
-      return;
+    if (!contestContext) {
+      console.warn('⚠️ No contest context provided for statistics. Proceeding with best-effort calculation.');
     }
 
     // leaderboard is an array of student data with {userId, totalScore, problemsSolved, submissions[]}
-    const totalParticipants = leaderboard.length;
-    const totalSubmissions = allSubmissions.length;
-    
+    const totalParticipants = Array.isArray(leaderboard) ? leaderboard.length : 0;
+    const totalSubmissions = Array.isArray(allSubmissions) ? allSubmissions.length : 0;
+
     // Calculate total problems solved across all students
-    const totalProblemsSolved = leaderboard.reduce((sum, student) => sum + (student.problemsSolved || 0), 0);
-    const totalProblemsAttempted = leaderboard.reduce((sum, student) => sum + (student.submissions?.length || 0), 0);
-    
+    const totalProblemsSolved = Array.isArray(leaderboard)
+      ? leaderboard.reduce((sum, student) => sum + (student.problemsSolved || 0), 0)
+      : 0;
+
+    const totalProblemsAttempted = Array.isArray(leaderboard)
+      ? leaderboard.reduce((sum, student) => sum + (student.submissions?.length || 0), 0)
+      : 0;
+
     console.log('Total problems solved:', totalProblemsSolved);
     console.log('Total problems attempted:', totalProblemsAttempted);
-    
+
     // Success rate = (total problems solved / total problems attempted) * 100
-    const successRate = totalProblemsAttempted > 0 
-      ? ((totalProblemsSolved / totalProblemsAttempted) * 100).toFixed(2)
+    const successRate = totalProblemsAttempted > 0
+      ? parseFloat(((totalProblemsSolved / totalProblemsAttempted) * 100).toFixed(2))
       : 0;
 
     // Average score across all students
-    const totalScore = leaderboard.reduce((sum, student) => sum + (student.totalScore || 0), 0);
-    const averageScore = totalParticipants > 0 
-      ? (totalScore / totalParticipants).toFixed(2)
+    const totalScore = Array.isArray(leaderboard)
+      ? leaderboard.reduce((sum, student) => sum + (student.totalScore || 0), 0)
+      : 0;
+    const averageScore = totalParticipants > 0
+      ? parseFloat((totalScore / totalParticipants).toFixed(2))
       : 0;
 
     console.log('Total score:', totalScore);
@@ -393,31 +411,44 @@ const ContestSubmissionAnalysis = ({ onBack }) => {
 
     // Unique problems attempted
     const uniqueProblems = new Set(
-      allSubmissions.map(s => s.problemId?._id || s.problemId).filter(Boolean)
+      (Array.isArray(allSubmissions) ? allSubmissions : []).map(s => s.problemId?._id || s.problemId).filter(Boolean)
     ).size;
 
     // Completion rate = (unique problems attempted / total contest problems) * 100
-    const totalProblems = selectedContest.problems?.length || 0;
+    const totalProblems = contestContext?.problems?.length || 0;
     const completionRate = totalProblems > 0
-      ? ((uniqueProblems / totalProblems) * 100).toFixed(2)
+      ? parseFloat(((uniqueProblems / totalProblems) * 100).toFixed(2))
       : 0;
 
     const newStats = {
       totalParticipants,
       totalSubmissions,
       uniqueProblems,
-      successRate: parseFloat(successRate),
-      averageScore: parseFloat(averageScore),
-      completionRate: parseFloat(completionRate)
+      successRate,
+      averageScore,
+      completionRate
     };
 
-    console.log('✅ New statistics:', newStats);
+    console.log('✅ ===== COMPUTED STATISTICS =====');
+    console.log('Total Participants:', totalParticipants);
+    console.log('Total Submissions:', totalSubmissions);
+    console.log('Problems Attempted:', uniqueProblems);
+    console.log('Average Score:', averageScore);
+    console.log('Success Rate:', successRate + '%');
+    console.log('Completion Rate:', completionRate + '%');
+    console.log('Full stats object:', JSON.stringify(newStats, null, 2));
+    console.log('Setting statistics state now...');
+    
     setStatistics(newStats);
+    
+    console.log('✅ Statistics state updated!');
   };
 
   const handleContestSelect = (contest) => {
     setSelectedContest(contest);
-    fetchContestSubmissions(contest._id);
+    // Pass the contest object as well so statistics can be calculated immediately
+    // without waiting for selectedContest state to update.
+    fetchContestSubmissions(contest._id, contest);
     setSearchTerm('');
     setStatusFilter('All');
   };
@@ -470,62 +501,7 @@ const ContestSubmissionAnalysis = ({ onBack }) => {
     }
   };
 
-  const exportToCSV = () => {
-    console.log('=== CSV Export Started ===');
-    console.log('Exporting leaderboard data:', latestSubmissions);
-    console.log('Number of students:', latestSubmissions.length);
-    
-    if (latestSubmissions.length === 0) {
-      console.warn('No submissions to export');
-      return;
-    }
-
-    // CSV headers for leaderboard data
-    const headers = ['Rank', 'Student ID', 'Student Name', 'Total Score', 'Problems Solved', 'Total Problems', 'Last Submission'];
-    console.log('CSV Headers:', headers);
-    
-    // Export leaderboard data (one row per student)
-    const rows = latestSubmissions.map((studentData, index) => {
-      const studentId = typeof studentData.userId === 'object' 
-        ? (studentData.userId?.student_id || studentData.userId?.studentId || 'N/A')
-        : 'N/A';
-      const studentName = typeof studentData.userId === 'object'
-        ? (studentData.userId?.name || 'N/A')
-        : 'N/A';
-      
-      return [
-        index + 1, // Rank
-        studentId,
-        studentName,
-        studentData.totalScore || 0,
-        studentData.problemsSolved || 0,
-        studentData.submissions?.length || 0,
-        formatDate(studentData.lastSubmission)
-      ];
-    });
-
-    console.log('CSV Rows (first 3):', rows.slice(0, 3));
-    console.log('Total rows:', rows.length);
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-    ].join('\n');
-
-    console.log('CSV Content Preview (first 500 chars):', csvContent.substring(0, 500));
-    const filename = `contest_${selectedContest?.title}_leaderboard.csv`;
-    console.log('Downloading file:', filename);
-
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    window.URL.revokeObjectURL(url);
-    
-    console.log('=== CSV Export Complete ===');
-  };
+  // CSV export removed — leaderboard CSV option intentionally disabled.
 
   const filteredSubmissions = latestSubmissions.filter(studentData => {
     // Case-insensitive search - search by student ID or name
@@ -656,23 +632,23 @@ const ContestSubmissionAnalysis = ({ onBack }) => {
               {!analysisLoading && (
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6">
                   <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/20 border border-blue-500/30 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-blue-400">{statistics.totalParticipants}</div>
+                    <div className="text-2xl font-bold text-blue-400">{statistics.totalParticipants || 0}</div>
                     <div className="text-xs text-gray-300 mt-1">Total Participants</div>
                   </div>
                   <div className="bg-gradient-to-br from-green-500/20 to-green-600/20 border border-green-500/30 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-green-400">{statistics.totalSubmissions}</div>
+                    <div className="text-2xl font-bold text-green-400">{statistics.totalSubmissions || 0}</div>
                     <div className="text-xs text-gray-300 mt-1">Total Submissions</div>
                   </div>
                   <div className="bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 border border-yellow-500/30 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-yellow-400">{statistics.uniqueProblems}</div>
+                    <div className="text-2xl font-bold text-yellow-400">{statistics.uniqueProblems || 0}</div>
                     <div className="text-xs text-gray-300 mt-1">Problems Attempted</div>
                   </div>
                   <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-500/30 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-purple-400">{statistics.averageScore.toFixed(0)}</div>
+                    <div className="text-2xl font-bold text-purple-400">{(statistics.averageScore || 0).toFixed(0)}</div>
                     <div className="text-xs text-gray-300 mt-1">Avg Score</div>
                   </div>
                   <div className="bg-gradient-to-br from-pink-500/20 to-pink-600/20 border border-pink-500/30 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-pink-400">{statistics.successRate}%</div>
+                    <div className="text-2xl font-bold text-pink-400">{(statistics.successRate || 0).toFixed(1)}%</div>
                     <div className="text-xs text-gray-300 mt-1">Success Rate</div>
                   </div>
                 </div>
@@ -724,14 +700,8 @@ const ContestSubmissionAnalysis = ({ onBack }) => {
                     <div className="text-sm text-gray-400">
                       Showing {filteredSubmissions.length} of {latestSubmissions.length} students
                     </div>
-                    <button
-                      onClick={exportToCSV}
-                      disabled={latestSubmissions.length === 0}
-                      className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors"
-                    >
-                      <HiDownload />
-                      <span>Export CSV</span>
-                    </button>
+                    {/* CSV export button removed as per request */}
+                    <div />
                   </div>
                 </div>
 
