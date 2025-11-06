@@ -1,7 +1,7 @@
 // src/components/client/ContestDetails.js
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { HiArrowLeft, HiStar, HiCalendar, HiClock, HiUsers, HiPlay, HiEye } from 'react-icons/hi';
+import { HiArrowLeft, HiStar, HiCalendar, HiClock, HiUsers, HiPlay, HiEye, HiInformationCircle } from 'react-icons/hi';
 import { contestAPI, authAPI } from '../../services/api';
 
 const ContestDetails = () => {
@@ -113,7 +113,45 @@ const ContestDetails = () => {
     try {
       const response = await contestAPI.getContestLeaderboard(id);
       if (response.success) {
-        setLeaderboard(response.data.leaderboard || []);
+        const leaderboardData = response.data.leaderboard || [];
+        
+        // Process leaderboard to show only one entry per user with highest score
+        const userScoreMap = new Map();
+        
+        leaderboardData.forEach(participant => {
+          const userId = participant.userId || participant._id;
+          
+          if (!userScoreMap.has(userId)) {
+            // First entry for this user
+            userScoreMap.set(userId, participant);
+          } else {
+            // Check if this entry has a higher score
+            const existing = userScoreMap.get(userId);
+            const currentScore = participant.score || 0;
+            const existingScore = existing.score || 0;
+            
+            if (currentScore > existingScore) {
+              // Replace with higher score entry
+              userScoreMap.set(userId, participant);
+            }
+          }
+        });
+        
+        // Convert map back to array and sort by score (descending)
+        const uniqueLeaderboard = Array.from(userScoreMap.values())
+          .sort((a, b) => (b.score || 0) - (a.score || 0))
+          .map((participant, index) => ({
+            ...participant,
+            rank: index + 1
+          }));
+        
+        console.log('📊 Processed leaderboard:', {
+          originalEntries: leaderboardData.length,
+          uniqueUsers: uniqueLeaderboard.length,
+          leaderboard: uniqueLeaderboard
+        });
+        
+        setLeaderboard(uniqueLeaderboard);
       }
     } catch (err) {
       console.error('Error fetching leaderboard:', err);
@@ -498,8 +536,18 @@ const ContestDetails = () => {
             {activeTab === 'leaderboard' && (
               <div className="space-y-4">
                 {leaderboard.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
+                  <>
+                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-4">
+                      <div className="flex items-center space-x-2 text-blue-400">
+                        <HiInformationCircle className="text-lg flex-shrink-0" />
+                        <p className="text-sm">
+                          Showing each participant's <strong>highest score</strong> from all submissions. 
+                          Rankings are updated in real-time based on best performance.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
                       <thead className="bg-gray-800/50">
                         <tr>
                           <th className="px-4 py-3 text-left text-sm font-semibold text-gray-300">Rank</th>
@@ -543,7 +591,8 @@ const ContestDetails = () => {
                         ))}
                       </tbody>
                     </table>
-                  </div>
+                    </div>
+                  </>
                 ) : (
                   <div className="text-center py-12">
                     <div className="text-gray-400 text-4xl mb-4">🏆</div>
