@@ -8,7 +8,8 @@ import ProblemManagement from './ProblemManagement';
 import StudentManagement from './StudentManagement';
 import Settings from './Settings';
 import Contest from './Contest';
-import SubmissionTracking from './SubmissionTracking'; 
+import SubmissionTracking from './SubmissionTracking';
+import ContestSubmissionAnalysis from './ContestSubmissionAnalysis'; 
 const AdminDashboard = () => {
     const navigate = useNavigate();
     const [activeView, setActiveView] = useState('dashboard'); // Track current view
@@ -88,20 +89,28 @@ const AdminDashboard = () => {
             stats: `${statistics.totalSubmissions} Submissions`
         },
         {
-            title: 'System Settings',
-            description: 'Configure platform preferences',
-            icon: HiCog,
-            action: () => handleNavigation('settings'),
-            color: 'from-slate-500 to-gray-600',
-            stats: 'Latest Config'
-        },
-        {
             title: 'Contest Management',
             description: 'Create and manage programming contests',
             icon: HiStar,
             action: () => handleNavigation('contests'),
             color: 'from-yellow-500 to-orange-600',
             stats: '3 Active'
+        },
+        {
+            title: 'Contest Analysis',
+            description: 'View latest submissions per student in contests',
+            icon: HiChartBar,
+            action: () => handleNavigation('contest-analysis'),
+            color: 'from-blue-500 to-indigo-600',
+            stats: 'Latest Submissions'
+        },
+        {
+            title: 'System Settings',
+            description: 'Configure platform preferences',
+            icon: HiCog,
+            action: () => handleNavigation('settings'),
+            color: 'from-slate-500 to-gray-600',
+            stats: 'Latest Config'
         }
     ];
 
@@ -124,7 +133,10 @@ const AdminDashboard = () => {
 
     if (activeView === 'contests') {
         return <Contest onBack={handleBackToDashboard} />;
+    }
 
+    if (activeView === 'contest-analysis') {
+        return <ContestSubmissionAnalysis onBack={handleBackToDashboard} />;
     }
 
     if (loading) {
