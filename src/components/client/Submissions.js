@@ -11,7 +11,9 @@ const Submissions = () => {
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState('All');
   const [languageFilter, setLanguageFilter] = useState('All');
+  const [problemFilter, setProblemFilter] = useState('All');
   const [userProfile, setUserProfile] = useState(null);
+  const [activeTab, setActiveTab] = useState('practice'); // 'practice' or 'contest'
 
   // Modal state for viewing code
   const [selectedSubmission, setSelectedSubmission] = useState(null);
@@ -128,16 +130,37 @@ const Submissions = () => {
     setSelectedSubmission(null);
   };
 
-  // Filter submissions based on status and language
+  // Filter submissions based on tab, problem, status and language
   useEffect(() => {
     let filtered = submissions;
     
+    // Filter by tab (practice vs contest)
+    if (activeTab === 'practice') {
+      filtered = filtered.filter(submission => !submission.contestId);
+      console.log('📝 Practice submissions:', filtered.length);
+    } else if (activeTab === 'contest') {
+      filtered = filtered.filter(submission => submission.contestId);
+      console.log('🏆 Contest submissions:', filtered.length);
+    }
+    
+    // Filter by problem
+    if (problemFilter !== 'All') {
+      filtered = filtered.filter(submission => {
+        const problemId = typeof submission.problemId === 'object' 
+          ? submission.problemId._id 
+          : submission.problemId;
+        return problemId === problemFilter;
+      });
+    }
+    
+    // Filter by status
     if (statusFilter !== 'All') {
       filtered = filtered.filter(submission => 
         getDisplayStatus(submission.status) === statusFilter
       );
     }
     
+    // Filter by language
     if (languageFilter !== 'All') {
       filtered = filtered.filter(submission => 
         submission.language.toLowerCase() === languageFilter.toLowerCase()
@@ -145,7 +168,7 @@ const Submissions = () => {
     }
     
     setFilteredSubmissions(filtered);
-  }, [submissions, statusFilter, languageFilter]);
+  }, [submissions, statusFilter, languageFilter, problemFilter, activeTab]);
 
   // Fetch submissions on component mount and set up auto-refresh
   useEffect(() => {
@@ -169,6 +192,7 @@ const Submissions = () => {
         clearInterval(interval);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Clean up interval on unmount
@@ -276,9 +300,25 @@ const Submissions = () => {
     return 'Unknown Problem';
   };
 
-  // Get unique values for filters
-  const statuses = ['All', ...new Set(submissions.map(s => getDisplayStatus(s.status)))];
-  const languages = ['All', ...new Set(submissions.map(s => formatLanguage(s.language)))];
+  // Get unique values for filters based on active tab
+  const getTabFilteredSubmissions = () => {
+    if (activeTab === 'practice') {
+      return submissions.filter(s => !s.contestId);
+    } else if (activeTab === 'contest') {
+      return submissions.filter(s => s.contestId);
+    }
+    return submissions;
+  };
+
+  const tabSubmissions = getTabFilteredSubmissions();
+  const statuses = ['All', ...new Set(tabSubmissions.map(s => getDisplayStatus(s.status)))];
+  const languages = ['All', ...new Set(tabSubmissions.map(s => formatLanguage(s.language)))];
+  
+  // Get unique problems with their titles
+  const problemOptions = ['All', ...Array.from(new Set(tabSubmissions.map(s => {
+    const problemId = typeof s.problemId === 'object' ? s.problemId._id : s.problemId;
+    return problemId;
+  })))];
 
   if (loading) {
     return (
@@ -339,6 +379,44 @@ const Submissions = () => {
           )}
         </div>
 
+        {/* Tabs for Practice vs Contest Submissions */}
+        <div className="flex justify-center mb-8">
+          <div className="inline-flex bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-1">
+            <button
+              onClick={() => setActiveTab('practice')}
+              className={`flex items-center space-x-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 ${
+                activeTab === 'practice'
+                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <HiCode className="text-lg" />
+              <span>Practice Submissions</span>
+              <span className={`text-xs px-2 py-1 rounded-full ${
+                activeTab === 'practice' ? 'bg-white/20' : 'bg-gray-700'
+              }`}>
+                {submissions.filter(s => !s.contestId).length}
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab('contest')}
+              className={`flex items-center space-x-2 px-6 py-3 rounded-xl font-medium transition-all duration-300 ${
+                activeTab === 'contest'
+                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <HiDocumentText className="text-lg" />
+              <span>Contest Submissions</span>
+              <span className={`text-xs px-2 py-1 rounded-full ${
+                activeTab === 'contest' ? 'bg-white/20' : 'bg-gray-700'
+              }`}>
+                {submissions.filter(s => s.contestId).length}
+              </span>
+            </button>
+          </div>
+        </div>
+
         {submissions.length === 0 ? (
           <div className="text-center py-12">
             <div className="w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -357,13 +435,15 @@ const Submissions = () => {
           </div>
         ) : (
           <>
-            {/* Stats Cards */}
+            {/* Stats Cards - Dynamic based on active tab */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
               <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-400 text-sm mb-1">Problems Attempted</p>
-                    <p className="text-2xl font-bold text-white">{submissions.length}</p>
+                    <p className="text-gray-400 text-sm mb-1">
+                      {activeTab === 'practice' ? 'Practice Problems' : 'Contest Problems'}
+                    </p>
+                    <p className="text-2xl font-bold text-white">{filteredSubmissions.length}</p>
                   </div>
                   <HiDocumentText className="text-blue-400 text-2xl" />
                 </div>
@@ -374,7 +454,7 @@ const Submissions = () => {
                   <div>
                     <p className="text-gray-400 text-sm mb-1">Solved</p>
                     <p className="text-2xl font-bold text-green-400">
-                      {submissions.filter(s => s.status === 'accepted').length}
+                      {filteredSubmissions.filter(s => s.status === 'accepted').length}
                     </p>
                   </div>
                   <HiCheckCircle className="text-green-400 text-2xl" />
@@ -386,7 +466,7 @@ const Submissions = () => {
                   <div>
                     <p className="text-gray-400 text-sm mb-1">Success Rate</p>
                     <p className="text-2xl font-bold text-yellow-400">
-                      {submissions.length > 0 ? Math.round((submissions.filter(s => s.status === 'accepted').length / submissions.length) * 100) : 0}%
+                      {filteredSubmissions.length > 0 ? Math.round((filteredSubmissions.filter(s => s.status === 'accepted').length / filteredSubmissions.length) * 100) : 0}%
                     </p>
                   </div>
                   <div className="text-yellow-400 text-2xl">📊</div>
@@ -398,7 +478,7 @@ const Submissions = () => {
                   <div>
                     <p className="text-gray-400 text-sm mb-1">Avg Score</p>
                     <p className="text-2xl font-bold text-purple-400">
-                      {submissions.length > 0 ? Math.round(submissions.reduce((acc, s) => acc + (s.score || 0), 0) / submissions.length) : 0}
+                      {filteredSubmissions.length > 0 ? Math.round(filteredSubmissions.reduce((acc, s) => acc + (s.score || 0), 0) / filteredSubmissions.length) : 0}
                     </p>
                   </div>
                   <div className="text-purple-400 text-2xl">⭐</div>
@@ -423,15 +503,48 @@ const Submissions = () => {
               <div className="flex items-center space-x-3 mb-4">
                 <HiFilter className="text-blue-400 text-xl" />
                 <h3 className="text-lg font-semibold text-white">Filter Submissions</h3>
-                <button
-                  onClick={fetchSubmissions}
-                  className="ml-auto flex items-center space-x-2 bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded-lg text-sm transition-colors"
-                >
-                  <HiRefresh className="text-sm" />
-                  <span>Refresh</span>
-                </button>
+                <div className="ml-auto flex items-center space-x-2">
+                  {(problemFilter !== 'All' || statusFilter !== 'All' || languageFilter !== 'All') && (
+                    <button
+                      onClick={() => {
+                        setProblemFilter('All');
+                        setStatusFilter('All');
+                        setLanguageFilter('All');
+                        console.log('🔄 Filters cleared');
+                      }}
+                      className="flex items-center space-x-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-400 px-3 py-1 rounded-lg text-sm transition-colors"
+                    >
+                      <HiX className="text-sm" />
+                      <span>Clear Filters</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={fetchSubmissions}
+                    className="flex items-center space-x-2 bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded-lg text-sm transition-colors"
+                  >
+                    <HiRefresh className="text-sm" />
+                    <span>Refresh</span>
+                  </button>
+                </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Problem</label>
+                  <select
+                    value={problemFilter}
+                    onChange={(e) => {
+                      setProblemFilter(e.target.value);
+                      console.log('🔍 Problem filter changed to:', e.target.value);
+                    }}
+                    className="w-full bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {problemOptions.map(problemId => (
+                      <option key={problemId} value={problemId}>
+                        {problemId === 'All' ? 'All Problems' : getProblemTitle(problemId)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Status</label>
                   <select
@@ -457,17 +570,61 @@ const Submissions = () => {
                   </select>
                 </div>
               </div>
+              
+              {/* Active Filters Display */}
+              {(problemFilter !== 'All' || statusFilter !== 'All' || languageFilter !== 'All') && (
+                <div className="mt-4 pt-4 border-t border-white/10">
+                  <p className="text-sm text-gray-400 mb-2">Active Filters:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {problemFilter !== 'All' && (
+                      <span className="inline-flex items-center space-x-1 bg-blue-500/20 text-blue-400 border border-blue-500/30 px-3 py-1 rounded-full text-xs">
+                        <span>Problem: {getProblemTitle(problemFilter)}</span>
+                        <button onClick={() => setProblemFilter('All')} className="hover:text-blue-300">
+                          <HiX className="w-3 h-3" />
+                        </button>
+                      </span>
+                    )}
+                    {statusFilter !== 'All' && (
+                      <span className="inline-flex items-center space-x-1 bg-green-500/20 text-green-400 border border-green-500/30 px-3 py-1 rounded-full text-xs">
+                        <span>Status: {statusFilter}</span>
+                        <button onClick={() => setStatusFilter('All')} className="hover:text-green-300">
+                          <HiX className="w-3 h-3" />
+                        </button>
+                      </span>
+                    )}
+                    {languageFilter !== 'All' && (
+                      <span className="inline-flex items-center space-x-1 bg-purple-500/20 text-purple-400 border border-purple-500/30 px-3 py-1 rounded-full text-xs">
+                        <span>Language: {languageFilter}</span>
+                        <button onClick={() => setLanguageFilter('All')} className="hover:text-purple-300">
+                          <HiX className="w-3 h-3" />
+                        </button>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Submissions Table */}
             <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl overflow-hidden">
               <div className="p-6 border-b border-white/20">
-                <h2 className="text-2xl font-bold text-white">
-                  Latest Submissions ({filteredSubmissions.length})
-                </h2>
-                <p className="text-gray-400 text-sm mt-1">
-                  Showing your most recent submission for each problem
-                </p>
+                <div className="flex items-center space-x-3">
+                  {activeTab === 'practice' ? (
+                    <HiCode className="text-blue-400 text-2xl" />
+                  ) : (
+                    <HiDocumentText className="text-purple-400 text-2xl" />
+                  )}
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">
+                      {activeTab === 'practice' ? 'Practice' : 'Contest'} Submissions ({filteredSubmissions.length})
+                    </h2>
+                    <p className="text-gray-400 text-sm mt-1">
+                      {activeTab === 'practice' 
+                        ? 'Your practice problem submissions' 
+                        : 'Your contest problem submissions'}
+                    </p>
+                  </div>
+                </div>
               </div>
               
               <div className="overflow-x-auto">
@@ -563,12 +720,36 @@ const Submissions = () => {
             {filteredSubmissions.length === 0 && (
               <div className="text-center py-12">
                 <div className="w-24 h-24 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <HiDocumentText className="text-3xl text-gray-400" />
+                  {activeTab === 'practice' ? (
+                    <HiCode className="text-3xl text-gray-400" />
+                  ) : (
+                    <HiDocumentText className="text-3xl text-gray-400" />
+                  )}
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-2">No Matching Submissions</h3>
-                <p className="text-gray-400">
-                  Try adjusting your filter criteria to see more submissions.
+                <h3 className="text-xl font-semibold text-white mb-2">
+                  {activeTab === 'practice' ? 'No Practice Submissions' : 'No Contest Submissions'}
+                </h3>
+                <p className="text-gray-400 mb-4">
+                  {activeTab === 'practice' 
+                    ? 'Start solving practice problems to see your submissions here!' 
+                    : 'Participate in contests to see your submissions here!'}
                 </p>
+                {activeTab === 'practice' && (
+                  <button 
+                    onClick={() => window.location.href = '/client/practice'}
+                    className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-xl font-medium transition-all duration-300 transform hover:scale-105"
+                  >
+                    Browse Practice Problems
+                  </button>
+                )}
+                {activeTab === 'contest' && (
+                  <button 
+                    onClick={() => window.location.href = '/client/contests'}
+                    className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-xl font-medium transition-all duration-300 transform hover:scale-105"
+                  >
+                    Browse Contests
+                  </button>
+                )}
               </div>
             )}
           </>
