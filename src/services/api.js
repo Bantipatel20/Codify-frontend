@@ -7,7 +7,7 @@ const BASE_URL = 'http://localhost:5000';
 // Create axios instance with default config
 const api = axios.create({
     baseURL: BASE_URL,
-    timeout: 30000,
+    timeout: 120000, // Increased to 120 seconds (2 minutes) for test case execution
     headers: {
         'Content-Type': 'application/json',
     },
@@ -427,7 +427,8 @@ export const contestAPI = {
 export const submissionsAPI = {
     submitCode: async (submissionData) => {
         try {
-            const response = await api.post('/api/submissions/submit', submissionData);
+            // Use the new endpoint that accepts pre-calculated results
+            const response = await api.post('/api/submissions/submit-with-results', submissionData);
             return response.data;
         } catch (error) {
             throw error.response?.data || error;
@@ -481,7 +482,10 @@ export const submissionsAPI = {
 export const compilerAPI = {
     compileCode: async (codeData) => {
         try {
-            const response = await api.post('/compile', codeData);
+            // Increase timeout specifically for compilation (can take longer with multiple test cases)
+            const response = await api.post('/compile', codeData, {
+                timeout: 180000 // 3 minutes for compile requests
+            });
             return response.data;
         } catch (error) {
             throw error.response?.data || error;
