@@ -10,7 +10,6 @@ import {
     HiCode,
     HiCheck,
     HiExclamation,
-    HiClock,
     HiChevronUp,
     HiChevronDown,
     HiRefresh
@@ -479,6 +478,31 @@ int main() {
         }
     };
 
+
+    const convertInputFormat = (input) => {
+        if (!input) return '';
+        
+        // Split by lines
+        const lines = input.split('\n');
+        const convertedLines = lines.map(line => {
+            // Remove leading/trailing whitespace
+            const trimmed = line.trim();
+            
+            // Check if line contains variable assignment pattern (e.g., "a = 11" or "x=5")
+            const assignmentMatch = trimmed.match(/^[a-zA-Z_]\w*\s*=\s*(.+)$/);
+            
+            if (assignmentMatch) {
+                // Extract value after '='
+                return assignmentMatch[1].trim();
+            }
+            
+            // Return line as-is if no assignment pattern
+            return trimmed;
+        });
+        
+        return convertedLines.join('\n');
+    };
+
     // Test against sample test cases only
     const handleTestCode = async () => {
         if (!code.trim()) {
@@ -516,7 +540,7 @@ int main() {
             setIsTesting(true);
             setSampleTestResults(null);
         } else {
-            setIsSubmitting(true);
+            // Don't set isSubmitting here, let the caller handle it
             setAllTestResults(null);
         }
 
@@ -525,47 +549,124 @@ int main() {
             const maxTests = isSampleMode ? Math.min(3, testCases.length) : testCases.length;
             
             console.log(`🔄 Running ${maxTests} ${mode} test cases...`);
+            console.log('📋 Test cases to process:', testCases);
             
+            // Process each test case sequentially
             for (let i = 0; i < maxTests; i++) {
                 const testCase = testCases[i];
+                const testNumber = i + 1;
                 
-                const response = await compilerAPI.compileCode({
-                    code: code,
-                    lang: language,
-                    input: testCase.input
+                console.log(`\n🧪 Test Case #${testNumber}:`, {
+                    type: testCase.type || testCase.isHidden ? 'hidden' : 'visible',
+                    originalInput: testCase.input,
+                    expectedOutput: testCase.output
                 });
+                
+                // Convert input format (e.g., "a = 11" → "11")
+                const convertedInput = convertInputFormat(testCase.input || '');
+                console.log(`📝 Converted input:`, convertedInput);
+                
+                try {
+                    // Send request to /compile API
+                    const startTime = Date.now();
+                    const response = await compilerAPI.compileCode({
+                        code: code,
+                        lang: language,
+                        input: convertedInput
+                    });
+                    const executionTime = Date.now() - startTime;
 
-                if (response.success) {
-                    const actualOutput = response.output?.trim();
-                    const expectedOutput = testCase.output?.trim();
-                    const passed = actualOutput === expectedOutput;
+                    console.log(`✅ Test ${testNumber} response:`, {
+                        success: response.success,
+                        stdout: response.output,
+                        stderr: response.stderr,
+                        executionTime: `${executionTime}ms`
+                    });
+
+                    // Check if execution was successful
+                    if (response.success || response.output) {
+                        const actualOutput = (response.output || '').trim();
+                        // Use expectedOutput if available, otherwise fall back to convertedInput for simple I/O problems
+                        let expectedOutput = (testCase.output || testCase.expectedOutput || '').trim();
+                        
+                        // If no expected output provided, use converted input as fallback (for simple echo problems)
+                        if (!expectedOutput && convertedInput) {
+                            expectedOutput = convertedInput.trim();
+                            console.warn(`⚠️ No expected output for test ${testNumber}, using converted input as fallback: "${expectedOutput}"`);
+                        }
+                        
+                        const passed = actualOutput === expectedOutput;
+                        
+                        results.push({
+                            testCase: testNumber,
+                            input: testCase.input,
+                            convertedInput: convertedInput,
+                            expectedOutput: expectedOutput,
+                            actualOutput: actualOutput,
+                            passed: passed,
+                            // Only store error if test failed, ignore stderr warnings for passed tests
+                            error: passed ? null : (response.stderr || null),
+                            runtime: response.executionTime || `${executionTime}ms`,
+                            memory: Math.floor(Math.random() * 50) + 10 + 'MB', // Mock memory
+                            type: testCase.type || (testCase.isHidden ? 'hidden' : 'visible'),
+                            isHidden: testCase.isHidden || testCase.type === 'hidden'
+                        });
+
+                        console.log(`${passed ? '✅ PASS' : '❌ FAIL'} Test ${testNumber}:`, {
+                            expected: expectedOutput,
+                            actual: actualOutput,
+                            match: passed
+                        });
+                    } else {
+                        // Compilation or runtime error
+                        results.push({
+                            testCase: testNumber,
+                            input: testCase.input,
+                            convertedInput: convertedInput,
+                            expectedOutput: testCase.output,
+                            actualOutput: '',
+                            passed: false,
+                            error: response.stderr || response.error || 'Compilation/Runtime error',
+                            runtime: 'N/A',
+                            memory: 'N/A',
+                            type: testCase.type || (testCase.isHidden ? 'hidden' : 'visible'),
+                            isHidden: testCase.isHidden || testCase.type === 'hidden'
+                        });
+
+                        console.log(`❌ FAIL Test ${testNumber}: Compilation/Runtime error`);
+                    }
+                } catch (apiError) {
+                    console.error(`❌ API Error for test ${testNumber}:`, apiError);
+                    
+                    // Extract error message from various possible formats
+                    let errorMessage = 'Unknown error';
+                    if (apiError.error) {
+                        errorMessage = apiError.error;
+                    } else if (apiError.stderr) {
+                        errorMessage = apiError.stderr;
+                    } else if (apiError.message) {
+                        errorMessage = apiError.message;
+                    } else if (apiError.response?.data?.error) {
+                        errorMessage = apiError.response.data.error;
+                    }
                     
                     results.push({
-                        testCase: i + 1,
+                        testCase: testNumber,
                         input: testCase.input,
-                        expectedOutput: expectedOutput,
-                        actualOutput: actualOutput,
-                        passed: passed,
-                        error: null,
-                        runtime: Math.floor(Math.random() * 100) + 'ms',
-                        memory: Math.floor(Math.random() * 50) + 10 + 'MB',
-                        type: testCase.type || 'normal'
-                    });
-                } else {
-                    results.push({
-                        testCase: i + 1,
-                        input: testCase.input,
+                        convertedInput: convertedInput,
                         expectedOutput: testCase.output,
                         actualOutput: '',
                         passed: false,
-                        error: response.error || 'Compilation failed',
+                        error: errorMessage,
                         runtime: 'N/A',
                         memory: 'N/A',
-                        type: testCase.type || 'normal'
+                        type: testCase.type || (testCase.isHidden ? 'hidden' : 'visible'),
+                        isHidden: testCase.isHidden || testCase.type === 'hidden'
                     });
                 }
             }
 
+            // Store results based on mode
             if (isSampleMode) {
                 setSampleTestResults(results);
                 setActiveTab('testcase');
@@ -573,17 +674,41 @@ int main() {
                 setAllTestResults(results);
             }
             
-            console.log(`✅ ${mode} test cases completed:`, results);
+            const passedCount = results.filter(r => r.passed).length;
+            const timeoutCount = results.filter(r => r.error && r.error.includes('timed out')).length;
+            
+            console.log(`\n✅ ${mode} test cases completed:`, {
+                total: results.length,
+                passed: passedCount,
+                failed: results.length - passedCount,
+                timedOut: timeoutCount,
+                results: results
+            });
+            
+            // Show alert if any test cases timed out
+            if (timeoutCount > 0) {
+                alert(`⚠️ Warning: ${timeoutCount} test case(s) timed out after 30 seconds.\n\nThis usually means:\n• Your code has an infinite loop\n• Your algorithm is too slow (O(n²) or worse)\n• Input is too large for your solution\n\nPlease optimize your code and try again.`);
+            }
+            
+            // Return results for submission mode
+            console.log(`📦 Returning ${results.length} test results for ${mode} mode`);
+            return results;
             
         } catch (error) {
             console.error(`❌ ${mode} testing error:`, error);
+            console.error('Error details:', {
+                message: error.message,
+                stack: error.stack,
+                response: error.response?.data
+            });
             alert(`Testing failed: ${error.message || 'Unknown error'}`);
+            return [];
         } finally {
             if (isSampleMode) {
                 setIsTesting(false);
-            } else {
-                setIsSubmitting(false);
             }
+            // Don't set isSubmitting to false here for 'all' mode
+            // Let handleConfirmSubmission handle it after showing the modal
         }
     };
 
@@ -620,30 +745,87 @@ int main() {
                 total: allTestCases.length
             });
 
+            let testResults = [];
             if (allTestCases.length > 0) {
-                await runTestCases(allTestCases, 'all');
+                // Wait for all test cases to complete and get results directly
+                testResults = await runTestCases(allTestCases, 'all');
+                console.log('✅ Received test results from runTestCases:', testResults);
+                
+                // If no results returned, something went wrong
+                if (!testResults || testResults.length === 0) {
+                    console.error('❌ No test results returned from runTestCases!');
+                    alert('Failed to execute test cases. Please try again.');
+                    return;
+                }
+            } else {
+                console.error('❌ No test cases available for this problem!');
+                alert('This problem has no test cases configured.');
+                return;
             }
 
-            // Submit to backend
+            // Calculate test results using the returned results (not state)
+            const passedTests = testResults.filter(r => r.passed).length;
+            const totalTests = testResults.length;
+            const score = totalTests > 0 ? Math.round((passedTests / totalTests) * 100) : 0;
+            
+            console.log('📊 Final test results:', {
+                passedTests,
+                totalTests,
+                score,
+                testResults: testResults
+            });
+            
+            // Determine status based on results
+            let status = 'wrong_answer';
+            if (passedTests === totalTests && totalTests > 0) {
+                status = 'accepted';
+            } else if (passedTests === 0 && totalTests > 0) {
+                // Check if ALL tests had runtime errors (not just stderr warnings)
+                const allHaveErrors = testResults.every(r => r.error && r.actualOutput === '');
+                status = allHaveErrors ? 'runtime_error' : 'wrong_answer';
+            } else if (passedTests > 0 && passedTests < totalTests) {
+                // Some tests passed, some failed - it's a wrong answer
+                status = 'wrong_answer';
+            }
+
+            console.log('🎯 Calculated status:', {
+                passedTests,
+                totalTests,
+                status,
+                testResults: testResults.map(r => ({
+                    testCase: r.testCase,
+                    passed: r.passed,
+                    hasError: !!r.error,
+                    hasOutput: !!r.actualOutput,
+                    error: r.error
+                }))
+            });
+
+            // Submit to backend with test results
             const submissionData = {
                 userId: currentUser._id,
                 problemId: problemData._id,
                 contestId: problemData.contestId || null,
                 code: code,
-                language: language
+                language: language,
+                status: status,
+                score: score,
+                passedTestCases: passedTests,
+                totalTestCases: totalTests,
+                testCaseResults: testResults
             };
 
-            console.log('📤 Submitting code to backend:', submissionData);
+            console.log('📤 Submitting code to backend with status:', status);
+            console.log('📤 Full submission data:', JSON.stringify(submissionData, null, 2));
 
             const response = await submissionsAPI.submitCode(submissionData);
             
             if (response.success) {
-                const passedTests = allTestResults ? allTestResults.filter(r => r.passed).length : 0;
-                const totalTests = allTestResults ? allTestResults.length : allTestCases.length;
+                console.log('✅ Submission successful, showing modal...');
                 
                 setSubmissionResult({
                     submissionId: response.submissionId,
-                    status: response.status,
+                    status: status, // Use the status we calculated, not backend status
                     totalTestCases: totalTests,
                     passedTestCases: passedTests,
                     message: response.message,
@@ -651,6 +833,8 @@ int main() {
                     memory: Math.floor(Math.random() * 50) + 10 + 'MB',
                     score: isContestMode ? Math.floor((passedTests / totalTests) * (problemData.points || 100)) : null
                 });
+                
+                // Only show modal after all test results are ready
                 setShowSubmissionModal(true);
                 
                 // Clear auto-save after successful submission
@@ -662,7 +846,10 @@ int main() {
                     );
                     console.log('🧹 Auto-save cleared after submission');
                 } catch (clearError) {
-                    console.error('Failed to clear auto-save:', clearError);
+                    // Silently ignore if no auto-save exists (404 error)
+                    if (clearError.response?.status !== 404) {
+                        console.error('Failed to clear auto-save:', clearError);
+                    }
                 }
             }
         } catch (error) {
@@ -863,7 +1050,7 @@ int main() {
                                                     <div>
                                                         <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Output: </span>
                                                         <code className="bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded text-sm">
-                                                            {problemData.sampleOutput}
+                                                            {problemData.sampleOutput || 'No output specified'}
                                                         </code>
                                                     </div>
                                                 </div>
@@ -886,7 +1073,7 @@ int main() {
                                                     <div>
                                                         <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Output: </span>
                                                         <code className="bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded text-sm">
-                                                            {testCase.output}
+                                                            {testCase.output || testCase.expectedOutput || 'No output specified'}
                                                         </code>
                                                     </div>
                                                 </div>
@@ -918,21 +1105,6 @@ int main() {
                                     </div>
                                 )}
 
-                                {/* Contest specific info */}
-                                {isContestMode && (
-                                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                                        <div className="flex items-center space-x-2 mb-2">
-                                            <HiClock className="text-blue-600 dark:text-blue-400" />
-                                            <span className="font-medium text-blue-800 dark:text-blue-200">Contest Information</span>
-                                        </div>
-                                        <div className="text-sm text-blue-700 dark:text-blue-300">
-                                            <p>This problem is part of an ongoing contest. Your submission will be evaluated and scored.</p>
-                                            {problemData.points && (
-                                                <p className="mt-1">Points: <strong>{problemData.points}</strong></p>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                         )}
 
@@ -1018,8 +1190,9 @@ int main() {
                                                             ? 'bg-green-100 dark:bg-green-800/20 text-green-800 dark:text-green-200'
                                                             : 'bg-red-100 dark:bg-red-800/20 text-red-800 dark:text-red-200'
                                                     }`}>
-                                                        {result.type === 'hidden' && !result.passed ? '[Hidden - Check Failed]' : 
-                                                         result.actualOutput || 'No output'}
+                                                        {result.type === 'hidden' || result.isHidden 
+                                                            ? (result.passed ? '[Hidden - Check Passed]' : '[Hidden - Check Failed]')
+                                                            : (result.actualOutput || 'No output')}
                                                     </pre>
                                                 </div>
                                                 {result.error && (
@@ -1210,27 +1383,6 @@ int main() {
                                 Are you sure you want to submit your solution for "{problemData.title}"?
                             </p>
                             
-                            {/* Test case breakdown */}
-                            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 text-sm">
-                                <div className="font-medium mb-2">Your submission will be evaluated against:</div>
-                                <div className="space-y-1">
-                                    <div className="flex justify-between">
-                                        <span>Sample test cases:</span>
-                                        <span className="text-green-600">{problemData.testCases?.length || 0}</span>
-                                    </div>
-                                    {problemData.hiddenTestCases?.length > 0 && (
-                                        <div className="flex justify-between">
-                                            <span>Hidden test cases:</span>
-                                            <span className="text-purple-600">{problemData.hiddenTestCases.length}</span>
-                                        </div>
-                                    )}
-                                    <div className="border-t pt-1 mt-2 flex justify-between font-medium">
-                                        <span>Total test cases:</span>
-                                        <span>{(problemData.testCases?.length || 0) + (problemData.hiddenTestCases?.length || 0)}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            
                             {isContestMode && (
                                 <p className="text-blue-600 dark:text-blue-400 text-sm mt-3">
                                     This submission will be scored for the contest.
@@ -1276,10 +1428,14 @@ int main() {
                             </div>
                             <h3 className="text-xl font-semibold mb-2">
                                 {submissionResult.passedTestCases === submissionResult.totalTestCases 
-                                    ? 'All Tests Passed!' 
+                                    ? '🎉 Accepted!' 
                                     : 'Submission Received'}
                             </h3>
-                            <p className="text-gray-600 dark:text-gray-400">{submissionResult.message}</p>
+                            <p className="text-gray-600 dark:text-gray-400">
+                                {submissionResult.passedTestCases === submissionResult.totalTestCases 
+                                    ? 'Congratulations! Your solution passed all test cases.' 
+                                    : submissionResult.message}
+                            </p>
                         </div>
                         
                         <div className="space-y-4 mb-6">
@@ -1289,18 +1445,37 @@ int main() {
                             </div>
                             
                             <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                                <div className={`rounded-lg p-3 ${
+                                    submissionResult.passedTestCases === submissionResult.totalTestCases 
+                                        ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' 
+                                        : 'bg-gray-50 dark:bg-gray-700'
+                                }`}>
                                     <div className="text-sm text-gray-600 dark:text-gray-400">Test Results</div>
-                                    <div className="font-medium">
+                                    <div className={`font-medium ${
+                                        submissionResult.passedTestCases === submissionResult.totalTestCases 
+                                            ? 'text-green-600 dark:text-green-400' 
+                                            : ''
+                                    }`}>
                                         {submissionResult.passedTestCases}/{submissionResult.totalTestCases} Passed
                                     </div>
-                                    <div className="text-xs text-gray-500 mt-1">
+                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                         {Math.round((submissionResult.passedTestCases / submissionResult.totalTestCases) * 100)}% Success Rate
                                     </div>
                                 </div>
                                 <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
                                     <div className="text-sm text-gray-600 dark:text-gray-400">Status</div>
-                                    <div className="font-medium capitalize">{submissionResult.status}</div>
+                                    <div className={`font-medium capitalize ${
+                                        submissionResult.status === 'accepted' 
+                                            ? 'text-green-600 dark:text-green-400' 
+                                            : submissionResult.status === 'wrong_answer'
+                                            ? 'text-yellow-600 dark:text-yellow-400'
+                                            : 'text-red-600 dark:text-red-400'
+                                    }`}>
+                                        {submissionResult.status === 'accepted' ? '✅ Accepted' : 
+                                         submissionResult.status === 'wrong_answer' ? '⚠️ Wrong Answer' :
+                                         submissionResult.status === 'runtime_error' ? '❌ Runtime Error' :
+                                         submissionResult.status.replace(/_/g, ' ')}
+                                    </div>
                                 </div>
                             </div>
                             
