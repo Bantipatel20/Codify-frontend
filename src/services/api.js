@@ -454,7 +454,13 @@ export const submissionsAPI = {
 
     getAllSubmissions: async (params = {}) => {
         try {
-            const response = await api.get('/api/submissions', { params });
+            // Add populate parameter to get full user and problem details
+            const response = await api.get('/api/submissions', { 
+                params: {
+                    ...params,
+                    populate: 'userId,problemId'
+                }
+            });
             return response.data;
         } catch (error) {
             throw error.response?.data || error;
