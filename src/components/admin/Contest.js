@@ -29,9 +29,10 @@ const Contest = ({ onBack }) => {
     rules: '',
     maxParticipants: 100,
     problems: [],
+    allowedLanguages: ['cpp'], // Default to C++ only
     participantSelection: 'manual',
     filterCriteria: {
-      department: [],
+      department: ['CSE'], // Default to CSE department only
       semester: [],
       division: [],
       batch: [],
@@ -60,7 +61,7 @@ const Contest = ({ onBack }) => {
 
   // Enhanced filtering state
   const [studentFilters, setStudentFilters] = useState({
-    department: 'All',
+    department: 'CSE', // Default to CSE department
     semester: 'All',
     division: 'All',
     batch: 'All',
@@ -72,9 +73,9 @@ const Contest = ({ onBack }) => {
   const [previewStudents, setPreviewStudents] = useState([]);
 
   // Dropdown options
-  const departments = ['CSE', 'IT', 'ECE', 'MECH', 'CIVIL', 'AIML'];
+  const departments = ['CSE']; // Only CSE department
   const semesters = [1, 2, 3, 4, 5, 6, 7, 8];
-  const divisions = [1, 2, 3, 4];
+  const divisions = ['1', '2']; // Only Division 1 and 2 (stored as strings in DB)
   const batches = ['A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4', 'C1', 'C2', 'C3', 'C4', 'D1', 'D2', 'D3', 'D4'];
 
   // Fetch functions (defined before useEffect to avoid dependency issues)
@@ -288,21 +289,48 @@ const Contest = ({ onBack }) => {
 
   const filterStudentsForSelection = () => {
     let filtered = [...allStudents];
+    
+    console.log('🔍 Filtering students with:', studentFilters);
+    console.log('📊 Total students before filter:', filtered.length);
 
     if (studentFilters.department !== 'All') {
       filtered = filtered.filter(student => student.department === studentFilters.department);
+      console.log(`✅ After department filter (${studentFilters.department}):`, filtered.length);
     }
 
     if (studentFilters.semester !== 'All') {
       filtered = filtered.filter(student => student.semester === parseInt(studentFilters.semester));
+      console.log(`✅ After semester filter (${studentFilters.semester}):`, filtered.length);
     }
 
     if (studentFilters.division !== 'All') {
-      filtered = filtered.filter(student => student.division === parseInt(studentFilters.division));
+      const divisionValue = studentFilters.division; // Keep as string since div is stored as string "1" or "2"
+      console.log(`🔢 Filtering by division: "${divisionValue}" (type: ${typeof divisionValue})`);
+      
+      // Log sample student divisions to debug
+      if (filtered.length > 0) {
+        console.log('Sample student div field:', filtered.slice(0, 5).map(s => ({
+          name: s.name,
+          div: s.div,
+          divType: typeof s.div
+        })));
+      }
+      
+      filtered = filtered.filter(student => {
+        // Use 'div' field which is stored as string "1" or "2"
+        const studentDiv = student.div;
+        const matches = studentDiv === divisionValue;
+        if (!matches && filtered.length < 20) { // Only log for debugging when small list
+          console.log(`❌ Student ${student.name} div "${studentDiv}" !== "${divisionValue}"`);
+        }
+        return matches;
+      });
+      console.log(`✅ After division filter ("${divisionValue}"):`, filtered.length);
     }
 
     if (studentFilters.batch !== 'All') {
       filtered = filtered.filter(student => student.batch === studentFilters.batch);
+      console.log(`✅ After batch filter (${studentFilters.batch}):`, filtered.length);
     }
 
     // Roll number type filter (Even/Odd based on last digit)
@@ -325,8 +353,10 @@ const Contest = ({ onBack }) => {
         student.student_id.toLowerCase().includes(searchTerm) ||
         student.email.toLowerCase().includes(searchTerm)
       );
+      console.log(`✅ After search filter ("${searchTerm}"):`, filtered.length);
     }
 
+    console.log('🎯 Final filtered students:', filtered.length);
     setFilteredStudents(filtered);
   };
 
@@ -342,7 +372,9 @@ const Contest = ({ onBack }) => {
     }
 
     if (formData.filterCriteria.division.length > 0) {
-      preview = preview.filter(student => formData.filterCriteria.division.includes(student.division));
+      preview = preview.filter(student => {
+        return formData.filterCriteria.division.includes(student.div);
+      });
     }
 
     if (formData.filterCriteria.batch.length > 0) {
@@ -375,9 +407,10 @@ const Contest = ({ onBack }) => {
       rules: '',
       maxParticipants: 100,
       problems: [],
+      allowedLanguages: ['cpp'], // Default to C++ only
       participantSelection: 'manual',
       filterCriteria: {
-        department: [],
+        department: ['CSE'], // Default to CSE department only
         semester: [],
         division: [],
         batch: [],
@@ -404,6 +437,7 @@ const Contest = ({ onBack }) => {
       rules: contest.rules || '',
       maxParticipants: contest.maxParticipants || 100,
       problems: contest.problems || [],
+      allowedLanguages: contest.allowedLanguages || ['cpp'], // Default to C++ only
       participantSelection: contest.participantSelection || 'manual',
       filterCriteria: contest.filterCriteria || {
         department: [],
@@ -545,6 +579,7 @@ const Contest = ({ onBack }) => {
         rules: formData.rules?.trim() || '',
         maxParticipants: parseInt(formData.maxParticipants) || 100,
         problems: allProblems,
+        allowedLanguages: formData.allowedLanguages.length > 0 ? formData.allowedLanguages : null, // null means all languages allowed
         createdBy: currentUser._id,
         participantSelection: formData.participantSelection,
         filterCriteria: cleanFilterCriteria,
@@ -620,7 +655,16 @@ const Contest = ({ onBack }) => {
   };
 
   const handleBulkDeselectStudents = (students) => {
+    if (!students || students.length === 0) {
+      console.log('No students to deselect');
+      return;
+    }
+    
     const studentIds = students.map(s => s._id);
+    const currentlySelected = formData.manualStudents.filter(id => studentIds.includes(id));
+    
+    console.log(`Deselecting ${currentlySelected.length} students from ${studentIds.length} filtered students`);
+    
     setFormData({
       ...formData,
       manualStudents: formData.manualStudents.filter(id => !studentIds.includes(id))
@@ -629,7 +673,7 @@ const Contest = ({ onBack }) => {
 
   const clearAllFilters = () => {
     setStudentFilters({
-      department: 'All',
+      department: 'CSE', // Reset to CSE department (not 'All')
       semester: 'All',
       division: 'All',
       batch: 'All',
@@ -826,7 +870,6 @@ const Contest = ({ onBack }) => {
                 onChange={(e) => setStudentFilters({...studentFilters, department: e.target.value})}
                 className="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
               >
-                <option value="All">All Departments</option>
                 {departments.map(dept => (
                   <option key={dept} value={dept}>{dept}</option>
                 ))}
@@ -897,7 +940,7 @@ const Contest = ({ onBack }) => {
                 onClick={() => handleBulkDeselectStudents(filteredStudents)}
                 className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-colors"
               >
-                Deselect All Filtered
+                Deselect All Filtered ({filteredStudents.filter(s => formData.manualStudents.includes(s._id)).length})
               </button>
             </div>
           </div>
@@ -946,7 +989,7 @@ const Contest = ({ onBack }) => {
                               Sem {student.semester}
                             </span>
                             <span className="bg-purple-500/20 text-purple-400 px-2 py-1 rounded">
-                              Div {student.division}
+                              Div {student.div}
                             </span>
                             <span className="bg-orange-500/20 text-orange-400 px-2 py-1 rounded">
                               {student.batch}
@@ -1159,7 +1202,7 @@ const Contest = ({ onBack }) => {
                       <div>
                         <span className="text-white text-sm font-medium">{student.name}</span>
                         <div className="text-xs text-gray-400">
-                          {student.student_id} • {student.department} • Sem {student.semester} • Div {student.division} • {student.batch}
+                          {student.student_id} • {student.department} • Sem {student.semester} • Div {student.div} • {student.batch}
                           <span className={`ml-2 px-1 py-0.5 rounded text-xs ${
                             getRollNumberType(student.student_id) === 'even' 
                               ? 'bg-cyan-500/20 text-cyan-400' 
@@ -1219,6 +1262,54 @@ const Contest = ({ onBack }) => {
           className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           required
         />
+      </div>
+
+      {/* Allowed Programming Languages */}
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">Allowed Programming Languages</label>
+        <div className="bg-gray-800 border border-gray-600 rounded-lg p-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { value: 'cpp', label: 'C++', icon: '⚡' },
+              { value: 'c', label: 'C', icon: '🔷' },
+              { value: 'python', label: 'Python', icon: '🐍' },
+              { value: 'java', label: 'Java', icon: '☕' },
+              { value: 'javascript', label: 'JavaScript', icon: '📜' },
+              { value: 'go', label: 'Go', icon: '🔵' },
+              { value: 'rust', label: 'Rust', icon: '🦀' },
+              { value: 'ruby', label: 'Ruby', icon: '💎' }
+            ].map((lang) => (
+              <label key={lang.value} className="flex items-center p-3 bg-gray-700 border border-gray-600 rounded-lg cursor-pointer hover:bg-gray-600 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={formData.allowedLanguages.includes(lang.value)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setFormData({
+                        ...formData,
+                        allowedLanguages: [...formData.allowedLanguages, lang.value]
+                      });
+                    } else {
+                      setFormData({
+                        ...formData,
+                        allowedLanguages: formData.allowedLanguages.filter(l => l !== lang.value)
+                      });
+                    }
+                  }}
+                  className="text-blue-500"
+                />
+                <span className="ml-3 text-white text-sm font-medium">
+                  {lang.icon} {lang.label}
+                </span>
+              </label>
+            ))}
+          </div>
+          <div className="mt-3 text-sm text-gray-400">
+            Selected: {formData.allowedLanguages.length > 0 ? formData.allowedLanguages.map(l => 
+              l.charAt(0).toUpperCase() + l.slice(1)
+            ).join(', ') : 'None (All languages will be allowed)'}
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1833,6 +1924,21 @@ const Contest = ({ onBack }) => {
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1">Description</label>
                 <p className="text-white">{selectedContest.description}</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Allowed Languages</label>
+                <div className="flex flex-wrap gap-2">
+                  {selectedContest.allowedLanguages && selectedContest.allowedLanguages.length > 0 ? (
+                    selectedContest.allowedLanguages.map((lang) => (
+                      <span key={lang} className="px-3 py-1 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full text-sm">
+                        {lang.charAt(0).toUpperCase() + lang.slice(1)}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-gray-400 text-sm">All languages allowed</span>
+                  )}
+                </div>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
