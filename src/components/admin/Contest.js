@@ -1,6 +1,6 @@
 // src/components/admin/Contest.js
-import React, { useState, useEffect } from 'react';
-import { HiStar, HiPlus, HiSearch, HiPencil, HiTrash, HiEye, HiX, HiArrowLeft, HiCalendar, HiClock, HiUsers, HiRefresh, HiFilter } from 'react-icons/hi';
+import React, { useState, useEffect, useCallback } from 'react';
+import { HiStar, HiPlus, HiSearch, HiPencil, HiTrash, HiEye, HiX, HiArrowLeft, HiCalendar, HiClock, HiUsers, HiRefresh } from 'react-icons/hi';
 import { contestAPI, problemsAPI, userAPI } from '../../services/api';
 
 const Contest = ({ onBack }) => {
@@ -77,6 +77,115 @@ const Contest = ({ onBack }) => {
   const divisions = [1, 2, 3, 4];
   const batches = ['A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4', 'C1', 'C2', 'C3', 'C4', 'D1', 'D2', 'D3', 'D4'];
 
+  // Fetch functions (defined before useEffect to avoid dependency issues)
+  const fetchContests = useCallback(async () => {
+    try {
+      const response = await contestAPI.getAllContests({ limit: 1000 });
+      if (response.success) {
+        setContests(response.data);
+      } else {
+        setError('Failed to fetch contests');
+      }
+    } catch (err) {
+      console.error('Error fetching contests:', err);
+      setError('Failed to fetch contests');
+    }
+  }, []);
+
+  const checkAndActivateContests = useCallback(async () => {
+    try {
+      const response = await contestAPI.getAllContests({ limit: 1000 });
+      if (!response.success || !response.data) {
+        return;
+      }
+
+      const now = new Date();
+      const contestsToUpdate = [];
+      const currentContests = response.data;
+
+      currentContests.forEach(contest => {
+        const startDate = new Date(contest.startDate);
+        const endDate = new Date(contest.endDate);
+
+        // Activate contest if start time has passed and it's still Upcoming
+        if (contest.status === 'Upcoming' && now >= startDate && now < endDate) {
+          contestsToUpdate.push({
+            contestId: contest._id,
+            title: contest.title,
+            newStatus: 'Active'
+          });
+        }
+        // Complete contest if end time has passed and it's Active
+        else if (contest.status === 'Active' && now >= endDate) {
+          contestsToUpdate.push({
+            contestId: contest._id,
+            title: contest.title,
+            newStatus: 'Completed'
+          });
+        }
+      });
+
+      // Update contests that need status change
+      if (contestsToUpdate.length > 0) {
+        console.log(`Auto-updating ${contestsToUpdate.length} contest(s)...`);
+        
+        for (const update of contestsToUpdate) {
+          try {
+            const statusResponse = await contestAPI.updateContestStatus(update.contestId, update.newStatus);
+            if (statusResponse.success) {
+              console.log(`✓ Contest "${update.title}" automatically updated to ${update.newStatus}`);
+            }
+          } catch (err) {
+            console.error(`Failed to update contest ${update.contestId}:`, err);
+          }
+        }
+
+        // Refresh contests list after updates
+        await fetchContests();
+      }
+    } catch (err) {
+      console.error('Error checking contest activation:', err);
+    }
+  }, [fetchContests]);
+
+  const fetchProblems = useCallback(async () => {
+    try {
+      const response = await problemsAPI.getAllProblems({ limit: 1000 });
+      if (response.success) {
+        setProblems(response.data);
+      }
+    } catch (err) {
+      console.error('Error fetching problems:', err);
+    }
+  }, []);
+
+  const fetchAllStudents = useCallback(async () => {
+    try {
+      const response = await userAPI.getAllUsers({ limit: 1000 });
+      if (response.success) {
+        setAllStudents(response.data);
+      }
+    } catch (err) {
+      console.error('Error fetching students:', err);
+    }
+  }, []);
+
+  const fetchInitialData = useCallback(async () => {
+    try {
+      setLoading(true);
+      await Promise.all([
+        fetchContests(),
+        fetchProblems(),
+        fetchAllStudents()
+      ]);
+    } catch (err) {
+      console.error('Error fetching initial data:', err);
+      setError('Failed to load initial data');
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchContests, fetchProblems, fetchAllStudents]);
+
   // Helper function to format date for datetime-local input
   const formatDateForInput = (dateString) => {
     if (!dateString) return '';
@@ -102,7 +211,7 @@ const Contest = ({ onBack }) => {
   const validateDates = (startDate, endDate) => {
     const start = new Date(startDate);
     const end = new Date(endDate);
-    const now = new Date();
+    // const now = new Date(); // Commented out - allowing past dates for editing existing contests
 
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
       return 'Invalid date format';
@@ -128,75 +237,37 @@ const Contest = ({ onBack }) => {
     return lastDigit % 2 === 0 ? 'even' : 'odd';
   };
 
+  // UseEffect hooks
   useEffect(() => {
     fetchInitialData();
-  }, []);
+    
+    // Set up automatic contest activation check
+    const interval = setInterval(() => {
+      checkAndActivateContests();
+    }, 60000); // Check every minute
+
+    // Initial check
+    checkAndActivateContests();
+
+    return () => clearInterval(interval);
+  }, [fetchInitialData, checkAndActivateContests]);
 
   useEffect(() => {
     filterContests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contests, searchTerm, statusFilter]);
 
   useEffect(() => {
     filterStudentsForSelection();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allStudents, studentFilters]);
 
   useEffect(() => {
     if (formData.participantSelection === 'automatic') {
       generatePreviewStudents();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.filterCriteria, formData.participantSelection, allStudents]);
-
-  const fetchInitialData = async () => {
-    try {
-      setLoading(true);
-      await Promise.all([
-        fetchContests(),
-        fetchProblems(),
-        fetchAllStudents()
-      ]);
-    } catch (err) {
-      console.error('Error fetching initial data:', err);
-      setError('Failed to load initial data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchContests = async () => {
-    try {
-      const response = await contestAPI.getAllContests({ limit: 1000 });
-      if (response.success) {
-        setContests(response.data);
-      } else {
-        setError('Failed to fetch contests');
-      }
-    } catch (err) {
-      console.error('Error fetching contests:', err);
-      setError('Failed to fetch contests');
-    }
-  };
-
-  const fetchProblems = async () => {
-    try {
-      const response = await problemsAPI.getAllProblems({ limit: 1000 });
-      if (response.success) {
-        setProblems(response.data);
-      }
-    } catch (err) {
-      console.error('Error fetching problems:', err);
-    }
-  };
-
-  const fetchAllStudents = async () => {
-    try {
-      const response = await userAPI.getAllUsers({ limit: 1000 });
-      if (response.success) {
-        setAllStudents(response.data);
-      }
-    } catch (err) {
-      console.error('Error fetching students:', err);
-    }
-  };
 
   const filterContests = () => {
     let filtered = contests;
@@ -1556,13 +1627,26 @@ const Contest = ({ onBack }) => {
             </div>
           </div>
 
-          <button
-            onClick={handleCreateContest}
-            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl transition-colors"
-          >
-            <HiPlus className="text-lg" />
-            <span className="font-medium">Create Contest</span>
-          </button>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => {
+                checkAndActivateContests();
+                alert('Checking for contests to activate...');
+              }}
+              className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-xl transition-colors"
+              title="Check and activate contests based on start time"
+            >
+              <HiRefresh className="text-lg" />
+              <span className="font-medium">Check Status</span>
+            </button>
+            <button
+              onClick={handleCreateContest}
+              className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl transition-colors"
+            >
+              <HiPlus className="text-lg" />
+              <span className="font-medium">Create Contest</span>
+            </button>
+          </div>
         </div>
 
         {error && (
