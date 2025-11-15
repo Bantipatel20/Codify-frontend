@@ -479,28 +479,50 @@ int main() {
     };
 
 
+    // Preprocess input: handle decorated inputs commonly seen in DSA problems
+    // Examples supported:
+    //  - n=8
+    //  - a = [2,4,6,7,8,9,12,34]
+    //  - key = 8
+    // This function will extract numeric tokens in order and return a whitespace-separated
+    // string suitable for stdin consumption by typical solutions (cin >> ...).
     const convertInputFormat = (input) => {
         if (!input) return '';
-        
-        // Split by lines
-        const lines = input.split('\n');
-        const convertedLines = lines.map(line => {
-            // Remove leading/trailing whitespace
-            const trimmed = line.trim();
-            
-            // Check if line contains variable assignment pattern (e.g., "a = 11" or "x=5")
-            const assignmentMatch = trimmed.match(/^[a-zA-Z_]\w*\s*=\s*(.+)$/);
-            
-            if (assignmentMatch) {
-                // Extract value after '='
-                return assignmentMatch[1].trim();
-            }
-            
-            // Return line as-is if no assignment pattern
-            return trimmed;
-        });
-        
-        return convertedLines.join('\n');
+
+        // If input looks already plain (no '=' and no '[' or ']'), return trimmed input
+        const looksDecorated = input.includes('=') || input.includes('[') || input.includes(']');
+        if (!looksDecorated) return input.trim();
+
+        // Extract integers (including negative numbers)
+        const numberMatches = input.match(/-?\d+/g);
+        if (numberMatches && numberMatches.length > 0) {
+            // Join numbers with spaces — most judge inputs accept whitespace separated tokens
+            return numberMatches.join(' ');
+        }
+
+        // If no numbers found, try to extract quoted strings (for string-based problems)
+        const quoted = [];
+        const singleQuoteRe = /'([^']+)'/g;
+        const doubleQuoteRe = /"([^"]+)"/g;
+        let m;
+        while ((m = singleQuoteRe.exec(input)) !== null) quoted.push(m[1]);
+        while ((m = doubleQuoteRe.exec(input)) !== null) quoted.push(m[1]);
+        if (quoted.length > 0) {
+            // Join quoted strings with newlines (safe fallback)
+            return quoted.join('\n');
+        }
+
+        // Fallback: strip variable names and punctuation, keep tokens
+        // Replace common punctuation with spaces and collapse multiple spaces
+        // Replace common punctuation with spaces (avoid eslint no-useless-escape by using multiple replaces)
+        const fallback = input
+            .replace(/=/g, ' ')
+            .replace(/\[/g, ' ')
+            .replace(/\]/g, ' ')
+            .replace(/[,;(){}]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        return fallback;
     };
 
     // Test against sample test cases only
